@@ -4,6 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { COLORS } from '../src/constants/theme';
+import { AuthProvider } from '../src/context/AuthContext';
+
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -14,8 +16,8 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <>
-      <StatusBar style="light" />
+    <AuthProvider>
+      <StatusBar style="dark" />
       <Stack
         screenOptions={{
           headerShown: false,
@@ -29,8 +31,10 @@ export default function RootLayout() {
         <Stack.Screen name="auth/role-selection" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="dashboard/owner" options={{ animation: 'fade' }} />
         <Stack.Screen name="dashboard/tenant" options={{ animation: 'fade' }} />
+        <Stack.Screen name="dashboard/my-listings" options={{ animation: 'fade' }} />
+        <Stack.Screen name="dashboard/search-results" options={{ animation: 'fade' }} />
         <Stack.Screen name="property/[id]" options={{ presentation: 'modal' }} />
       </Stack>
-    </>
+    </AuthProvider>
   );
 }

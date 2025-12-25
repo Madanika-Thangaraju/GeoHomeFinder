@@ -39,7 +39,7 @@ export default function SignupScreen() {
                         label="Full Name"
                         value={name}
                         onChangeText={setName}
-                        placeholder="e.g. Rahul "
+                        placeholder="e.g. Madhu "
                         style={styles.inputSpacer}
                         variant="standard"
                     />

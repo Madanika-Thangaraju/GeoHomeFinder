@@ -50,6 +50,7 @@ export default function WelcomeScreen() {
                         onPress={() => router.push('/auth/login')}
                         variant="secondary" // Using darker/glass variant style
                         style={styles.loginBtn}
+                        textStyle={{ color: COLORS.primary }}
                     />
                     <GlowButton
                         title="Create Account"

@@ -2,25 +2,25 @@ export const COLORS = {
   primary: '#2563EB', // Strong Blue (Login Button)
   primaryDark: '#1E3A8A',
   secondary: '#64748B',
-  background: '#FFFFFF', // Clean White
-  backgroundDark: '#0F172A', // Deep Blue/Black for Welcome
-  surface: '#FFFFFF',
+  background: '#F8FAFC', // Slate 50 (Clean Light)
+  backgroundDark: '#0F172A', // Deep Blue/Black
+  surface: '#FFFFFF', // White Card
   surfaceHighlight: '#F1F5F9', // Light Gray inputs
-  textPrimary: '#0F172A', // Dark text
-  textSecondary: '#64748B', // Gray text
+  textPrimary: '#0F172A', // Slate 900 (Dark text)
+  textSecondary: '#64748B', // Slate 500 (Gray text)
   textInverse: '#FFFFFF', // White text
   success: '#10B981',
   error: '#EF4444',
   white: '#FFFFFF',
   black: '#000000',
-  glassBorder: 'rgba(255, 255, 255, 0.2)',
-  inputBackground: '#F3F4F6', // Light gray for inputs
+  glassBorder: 'rgba(226, 232, 240, 0.8)', // Slate 200 (Light Border)
+  inputBackground: '#F1F5F9', // Slate 100
 };
 
 export const GRADIENTS = {
-  background: ['#1E1B4B', '#312E81'] as const, // Dark (Welcome)
+  background: ['#F8FAFC', '#F1F5F9'] as const, // Light Gradient
   primaryButton: ['#2563EB', '#1D4ED8'] as const, // Blue Scale
-  secondaryButton: ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)'] as const, // Transparent/Glass
+  secondaryButton: ['#FFFFFF', '#F8FAFC'] as const, // White/Light
   card: ['#FFFFFF', '#FFFFFF'] as const, // Clean White
 };
 

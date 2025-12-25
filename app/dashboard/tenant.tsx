@@ -1,56 +1,89 @@
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-// We still use GradientBackground for the map placeholder simulation but different style
+import React, { useState } from 'react';
+import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+// Map placeholder layer
+
 import { Ionicons } from '@expo/vector-icons';
-import { GradientBackground } from '../../src/components/shared/GradientBackground';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 
 const { width } = Dimensions.get('window');
 
-const MOCK_PROPERTIES = [
-    { id: 1, price: '₹12,500', type: '2 BHK', size: '950 sqft', dist: '0.2 km', address: 'Gandhipuram, Coimbatore', match: '90% Match' },
-    { id: 2, price: '₹18,000', type: '1 BHK', size: 'Loft Style', dist: '1.2 km', address: 'RS Puram, Coimbatore', match: '85% Match' },
-];
+import { PROPERTIES } from '../../src/data/properties';
+
+const MOCK_PROPERTIES = PROPERTIES;
 
 export default function TenantDashboard() {
     const router = useRouter();
+    const [alertsEnabled, setAlertsEnabled] = useState(true);
+    const [radius, setRadius] = useState(1.5);
+    const [searchMode, setSearchMode] = useState('pin');
+
+    // Simple interaction to simulate slider movement (toggle between values on tap)
+    const toggleRadius = () => {
+        setRadius(prev => {
+            if (prev === 1.5) return 3.0;
+            if (prev === 3.0) return 5.0;
+            return 1.5;
+        });
+    };
+
+    const getKnobPosition = () => {
+        if (radius === 1.5) return '10%';
+        if (radius === 3.0) return '45%';
+        return '80%';
+    };
 
     return (
         <View style={styles.container}>
             {/* Search Header (Floating) */}
             <View style={styles.searchContainer}>
                 <View style={styles.searchBar}>
+                    <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 8 }}>
+                        <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+                    </TouchableOpacity>
                     <Ionicons name="search" size={20} color={COLORS.textSecondary} />
                     <Text style={styles.searchPlaceholder}>Gandhipuram, Coimbatore</Text>
-                    <TouchableOpacity>
-                        <Ionicons name="notifications-outline" size={24} color={COLORS.textPrimary} />
+                    <TouchableOpacity onPress={() => router.push('/dashboard/rental-preferences')}>
+                        <Ionicons name="filter" size={24} color={COLORS.textPrimary} />
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.filterRow}>
-                    <TouchableOpacity style={[styles.filterPill, styles.activePill]}>
-                        <Text style={styles.activePillText}>Pin</Text>
+                    <TouchableOpacity
+                        style={[styles.filterPill, searchMode === 'pin' && styles.activePill]}
+                        onPress={() => setSearchMode('pin')}
+                    >
+                        <Text style={[styles.pillText, searchMode === 'pin' && styles.activePillText]}>Pin</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.filterPill, { backgroundColor: COLORS.primary }]}>
-                        <Text style={[styles.pillText, { color: COLORS.white }]}>Radius</Text>
+                    <TouchableOpacity
+                        style={[styles.filterPill, searchMode === 'radius' && styles.activePill]}
+                        onPress={() => setSearchMode('radius')}
+                    >
+                        <Text style={[styles.pillText, searchMode === 'radius' && styles.activePillText]}>Radius</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.filterPill}>
-                        <Text style={styles.pillText}>Draw</Text>
+                    <TouchableOpacity
+                        style={[styles.filterPill, searchMode === 'draw' && styles.activePill]}
+                        onPress={() => setSearchMode('draw')}
+                    >
+                        <Text style={[styles.pillText, searchMode === 'draw' && styles.activePillText]}>Draw</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
             {/* Map Layer (Simulated) */}
             <View style={styles.mapLayer}>
-                {/* This would be <MapView /> in real app */}
-                <GradientBackground style={{ opacity: 0.1 }}>
-                    {/* Map UI Elements */}
-                    <View style={styles.radiusCircle} />
-                    <View style={[styles.mapPin, { top: '40%', left: '50%' }]}>
-                        <Ionicons name="home" size={16} color={COLORS.white} />
-                    </View>
-                </GradientBackground>
+                {/* Background Location Image */}
+                <Image
+                    source={{ uri: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1000&q=80' }}
+                    style={[StyleSheet.absoluteFillObject, { opacity: 0.8 }]}
+                    resizeMode="cover"
+                />
+
+                {/* Map UI Elements */}
+                <View style={styles.radiusCircle} />
+                <View style={[styles.mapPin, { top: '40%', left: '50%' }]}>
+                    <Ionicons name="home" size={16} color={COLORS.white} />
+                </View>
             </View>
 
             {/* Side Controls */}
@@ -66,31 +99,38 @@ export default function TenantDashboard() {
                 <View style={styles.sheetHandle} />
 
                 {/* Alert Toggle */}
-                <View style={styles.alertToggle}>
-                    <View style={styles.alertIcon}>
-                        <Ionicons name="wifi" size={16} color={COLORS.success} />
+                <TouchableOpacity
+                    style={styles.alertToggle}
+                    activeOpacity={0.8}
+                    onPress={() => setAlertsEnabled(!alertsEnabled)}
+                >
+                    <View style={[styles.alertIcon, { backgroundColor: alertsEnabled ? '#DCFCE7' : '#E2E8F0' }]}>
+                        <Ionicons name={alertsEnabled ? "wifi" : "wifi-outline"} size={16} color={alertsEnabled ? COLORS.success : COLORS.textSecondary} />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.alertTitle}>Push Alerts Active</Text>
+                        <Text style={styles.alertTitle}>Push Alerts {alertsEnabled ? 'Active' : 'Off'}</Text>
                         <Text style={styles.alertSubtitle}>Notifying you when entering this zone.</Text>
                     </View>
-                    <TouchableOpacity>
-                        <Ionicons name="toggle" size={28} color={COLORS.primary} />
-                    </TouchableOpacity>
-                </View>
+                    <View>
+                        <Ionicons name={alertsEnabled ? "toggle" : "toggle-outline"} size={28} color={alertsEnabled ? COLORS.primary : COLORS.textSecondary} />
+                    </View>
+                </TouchableOpacity>
 
 
                 {/* Radius Slider Placeholder */}
                 <View style={styles.radiusSlider}>
                     <Text style={styles.sliderLabel}>Alert Radius</Text>
-                    <Text style={styles.sliderValue}>1.5 km</Text>
+                    <Text style={styles.sliderValue}>{radius} km</Text>
                 </View>
-                <View style={styles.sliderLine}>
-                    <View style={styles.sliderKnob} />
-                </View>
+                {/* Interactive Slider Area */}
+                <TouchableOpacity activeOpacity={0.9} onPress={toggleRadius} style={{ marginBottom: SPACING.l }}>
+                    <View style={styles.sliderLine}>
+                        <View style={[styles.sliderKnob, { marginLeft: getKnobPosition() }]} />
+                    </View>
+                </TouchableOpacity>
 
                 <View style={styles.listHeader}>
-                    <Text style={styles.listCount}>3 homes near you</Text>
+                    <Text style={styles.listCount}>{MOCK_PROPERTIES.length} homes near you</Text>
                     <View style={styles.liveBadge}>
                         <View style={styles.badgeDot} />
                         <Text style={styles.badgeText}>LIVE UPDATES</Text>
@@ -108,13 +148,26 @@ export default function TenantDashboard() {
                             onPress={() => router.push({ pathname: '/property/[id]', params: { id: prop.id } })}
                         >
                             <View style={styles.propertyCard}>
-                                <View style={styles.cardImage} />
-                                <View style={styles.cardContent}>
+                                <View style={styles.cardImageContainer}>
+                                    <Image source={prop.image} style={styles.cardImage} resizeMode="cover" />
+                                    <View style={styles.distBadge}>
+                                        <Ionicons name="location" size={10} color={COLORS.white} />
+                                        <Text style={styles.distText}>{prop.dist}</Text>
+                                    </View>
+                                    {prop.status === 'Sold Out' && (
+                                        <View style={styles.soldOutOverlay}>
+                                            <View style={styles.soldOutBadge}>
+                                                <Text style={styles.soldOutText}>Sold Out</Text>
+                                            </View>
+                                        </View>
+                                    )}
+                                </View>
+                                <View style={[styles.cardContent, prop.status === 'Sold Out' && { opacity: 0.6 }]}>
                                     <View style={styles.cardHeader}>
                                         <Text style={styles.cardPrice}>{prop.price}<Text style={styles.cardPeriod}>/mo</Text></Text>
-                                        <Ionicons name="heart-outline" size={20} color={COLORS.textSecondary} />
+                                        <Ionicons name="heart" size={20} color="#EF4444" />
                                     </View>
-                                    <Text style={styles.cardDetails}>{prop.type} • {prop.type === '2 BHK' ? '2 Bath' : '1 Bath'} • {prop.size}</Text>
+                                    <Text style={styles.cardDetails}>{prop.type} • {prop.type === '3 BHK' ? '3 Bath' : (prop.type === '2 BHK' ? '2 Bath' : '1 Bath')} • {prop.size}</Text>
                                     <Text style={styles.cardAddress}>{prop.address}</Text>
 
                                     <View style={styles.cardFooter}>
@@ -122,16 +175,28 @@ export default function TenantDashboard() {
                                         <Text style={styles.petBadge}>Pet Friendly</Text>
                                     </View>
 
-                                    <View style={styles.distBadge}>
-                                        <Ionicons name="location" size={10} color={COLORS.white} />
-                                        <Text style={styles.distText}>{prop.dist}</Text>
-                                    </View>
                                 </View>
                             </View>
                         </TouchableOpacity>
                     ))}
                     <View style={{ height: 100 }} />
                 </ScrollView>
+            </View>
+
+            {/* Bottom Navigation */}
+            <View style={styles.bottomNav}>
+                <TouchableOpacity style={styles.navItem}>
+                    <Ionicons name="home" size={24} color={COLORS.primary} />
+                    <Text style={[styles.navText, { color: COLORS.primary }]}>Home</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/dashboard/saved-properties')}>
+                    <Ionicons name="heart-outline" size={24} color={COLORS.textSecondary} />
+                    <Text style={styles.navText}>Saved</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/dashboard/profile-tenant')}>
+                    <Ionicons name="person-outline" size={24} color={COLORS.textSecondary} />
+                    <Text style={styles.navText}>Profile</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
@@ -177,7 +242,7 @@ const styles = StyleSheet.create({
         ...LAYOUT.shadow,
     },
     activePill: {
-        backgroundColor: COLORS.white,
+        backgroundColor: COLORS.primary,
     },
     pillText: {
         fontSize: 12,
@@ -187,7 +252,7 @@ const styles = StyleSheet.create({
     activePillText: {
         fontSize: 12,
         fontWeight: '600',
-        color: COLORS.textPrimary,
+        color: COLORS.white,
     },
     mapLayer: {
         height: '50%',
@@ -261,7 +326,6 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: '#DCFCE7',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: SPACING.m,
@@ -294,7 +358,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#E2E8F0',
         marginHorizontal: SPACING.l,
         borderRadius: 2,
-        marginBottom: SPACING.l,
+        // marginBottom: SPACING.l, // Removed since wrapped in Touchable
     },
     sliderKnob: {
         width: 16,
@@ -302,7 +366,6 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         backgroundColor: COLORS.primary,
         marginTop: -6,
-        marginLeft: '40%',
         borderWidth: 2,
         borderColor: COLORS.white,
         ...LAYOUT.shadow,
@@ -344,15 +407,42 @@ const styles = StyleSheet.create({
     propertyCard: {
         flexDirection: 'row',
         backgroundColor: COLORS.white,
-        borderRadius: LAYOUT.radius.m,
+        borderRadius: 16, // Smoother corners for "neatness"
         marginBottom: SPACING.m,
         overflow: 'hidden',
         ...LAYOUT.shadow,
-        shadowOpacity: 0.05,
+        shadowOpacity: 0.1,
         height: 120,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+    },
+    cardImageContainer: {
+        width: 120,
+        height: '100%',
+        position: 'relative',
+    },
+    soldOutOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    soldOutBadge: {
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+        transform: [{ rotate: '-10deg' }],
+    },
+    soldOutText: {
+        color: COLORS.white,
+        fontWeight: 'bold',
+        fontSize: 10,
+        textTransform: 'uppercase',
     },
     cardImage: {
-        width: 100,
+        width: 120,
+        height: '100%',
         backgroundColor: '#64748B',
     },
     cardContent: {
@@ -408,18 +498,41 @@ const styles = StyleSheet.create({
     },
     distBadge: {
         position: 'absolute',
-        left: -90, // Position over image
         top: 10,
+        left: 10,
         backgroundColor: 'rgba(0,0,0,0.6)',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
         borderRadius: 4,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 2,
+        gap: 4,
+        zIndex: 10,
     },
     distText: {
         color: COLORS.white,
         fontSize: 10,
-    }
+    },
+    bottomNav: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: COLORS.white,
+        flexDirection: 'row',
+        paddingVertical: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#E2E8F0',
+        paddingBottom: 30, // Safe area
+    },
+    navItem: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    navText: {
+        fontSize: 10,
+        marginTop: 4,
+        color: COLORS.textSecondary,
+    },
 });

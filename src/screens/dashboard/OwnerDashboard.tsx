@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInRight } from 'react-native-reanimated';
@@ -7,6 +8,7 @@ import { GradientBackground } from '../../components/shared/GradientBackground';
 import { COLORS, FONTS, LAYOUT, SPACING } from '../../constants/theme';
 
 export const OwnerDashboard = () => {
+    const router = useRouter();
     return (
         <GradientBackground>
             <ScrollView contentContainerStyle={styles.container}>
@@ -19,10 +21,15 @@ export const OwnerDashboard = () => {
                             <Text style={styles.locationText}>San Francisco, CA</Text>
                         </View>
                     </View>
-                    <TouchableOpacity style={styles.notificationBtn}>
-                        <Ionicons name="notifications-outline" size={24} color={COLORS.white} />
-                        <View style={styles.badge} />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: SPACING.s }}>
+                        <TouchableOpacity style={styles.notificationBtn} onPress={() => router.push('/dashboard/profile')}>
+                            <Ionicons name="person-circle" size={28} color={COLORS.white} />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.notificationBtn}>
+                            <Ionicons name="notifications-outline" size={24} color={COLORS.white} />
+                            <View style={styles.badge} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <Text style={styles.welcomeText}>Manage your Real Estate Portfolio</Text>

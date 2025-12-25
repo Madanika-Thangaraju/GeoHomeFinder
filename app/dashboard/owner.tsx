@@ -3,11 +3,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
+    Image as RNImage,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { GlassCard } from '../../src/components/shared/GlassCard';
@@ -24,31 +25,46 @@ export default function OwnerDashboard() {
             >
                 {/* Header */}
                 <View style={styles.header}>
-                    <View style={styles.locationRow}>
-                        <View style={styles.locationIconBg}>
-                            <Ionicons
-                                name="location-sharp"
-                                size={16}
-                                color={COLORS.primary}
-                            />
-                        </View>
-                        <View>
-                            <Text style={styles.brandTitle}>GEOHOME</Text>
-                            <Text style={styles.locationText}>Coimbatore, IN</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <TouchableOpacity onPress={() => router.back()}>
+                            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+                        </TouchableOpacity>
+                        <View style={styles.locationRow}>
+                            <View style={styles.locationIconBg}>
+                                <Ionicons
+                                    name="location-sharp"
+                                    size={16}
+                                    color={COLORS.primary}
+                                />
+                            </View>
+                            <View>
+                                <Text style={styles.brandTitle}>GEOHOME</Text>
+                                <Text style={styles.locationText}>Coimbatore, IN</Text>
+                            </View>
                         </View>
                     </View>
 
-                    <TouchableOpacity style={styles.notificationBtn}>
-                        <Ionicons
-                            name="notifications"
-                            size={22}
-                            color={COLORS.textSecondary}
-                        />
-                        <View style={styles.badge}>
-                            <Text style={styles.badgeText}>1</Text>
-                        </View>
-                    </TouchableOpacity>
+                    {/* Right Side Actions */}
+                    <View style={styles.headerRight}>
+                        <TouchableOpacity style={styles.notificationBtn} onPress={() => router.push('/dashboard/notifications')}>
+                            <Ionicons
+                                name="notifications"
+                                size={22}
+                                color={COLORS.textSecondary}
+                            />
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>3</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={() => router.push('/dashboard/profile-owner')}>
+                            <Ionicons name="person-circle-outline" size={40} color={COLORS.textSecondary} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
+
+                {/* Profile & Notifications */}
+                {/* Profile & Notifications moved to header */}
 
                 {/* Greeting */}
                 <Animated.View entering={FadeInDown.delay(100)}>
@@ -61,10 +77,15 @@ export default function OwnerDashboard() {
                 {/* Hero Section (NO IMAGE) */}
                 <Animated.View entering={FadeInDown.delay(200)} style={styles.heroSection}>
                     <View style={styles.heroCard}>
+                        <RNImage
+                            source={{ uri: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80' }}
+                            style={styles.heroBackground}
+                            resizeMode="cover"
+                        />
                         <LinearGradient
-                            colors={['#0F172A', '#1E293B', '#020617']}
+                            colors={['rgba(15,23,42,0.1)', 'rgba(15,23,42,0.6)']} // Adjusted opacity for better visibility of image
                             start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
+                            end={{ x: 0, y: 1 }}
                             style={styles.heroBackground}
                         />
 
@@ -74,11 +95,10 @@ export default function OwnerDashboard() {
                                 <Text style={styles.aiTagText}>AI VALUATION ACTIVE</Text>
                             </View>
 
-                            <Text style={styles.heroDescription}>
-                                AI-powered price recommendations for your location
-                            </Text>
-
-                            <TouchableOpacity style={styles.addPropertyBtn}>
+                            <TouchableOpacity
+                                style={styles.addPropertyBtn}
+                                onPress={() => router.push('/dashboard/add-property')}
+                            >
                                 <LinearGradient
                                     colors={['#06B6D4', '#2563EB']}
                                     start={{ x: 0, y: 0 }}
@@ -142,13 +162,15 @@ export default function OwnerDashboard() {
 
                 {/* Stats */}
                 <View style={styles.statsGrid}>
-                    <GlassCard style={styles.statsCard}>
-                        <View style={styles.statsIconBg}>
-                            <Ionicons name="home" size={24} color="#C084FC" />
-                        </View>
-                        <Text style={styles.statsValue}>2</Text>
-                        <Text style={styles.statsLabel}>Active Listings</Text>
-                    </GlassCard>
+                    <TouchableOpacity style={{ flex: 1 }} onPress={() => router.push('/dashboard/my-listings')}>
+                        <GlassCard style={styles.statsCard}>
+                            <View style={styles.statsIconBg}>
+                                <Ionicons name="home" size={24} color="#C084FC" />
+                            </View>
+                            <Text style={styles.statsValue}>2</Text>
+                            <Text style={styles.statsLabel}>Active Listings</Text>
+                        </GlassCard>
+                    </TouchableOpacity>
 
                     <GlassCard style={styles.statsCard}>
                         <View
@@ -176,20 +198,14 @@ export default function OwnerDashboard() {
                     <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.navItem}>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/dashboard/my-listings')}>
                     <Ionicons name="list" size={22} color={COLORS.textSecondary} />
                     <Text style={styles.navLabel}>Listings</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.navItem}>
-                    <Ionicons name="chatbubble" size={22} color={COLORS.textSecondary} />
-                    <Text style={styles.navLabel}>Chat</Text>
-                </TouchableOpacity>
 
-                <TouchableOpacity style={styles.navItem}>
-                    <Ionicons name="person" size={22} color={COLORS.textSecondary} />
-                    <Text style={styles.navLabel}>Profile</Text>
-                </TouchableOpacity>
+
+
             </View>
         </View>
     );
@@ -303,6 +319,7 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: 'bold',
     },
+
     heroDescription: {
         color: COLORS.white,
         fontSize: 14,
@@ -450,5 +467,17 @@ const styles = StyleSheet.create({
     },
     navLabelActive: {
         color: COLORS.primary,
+    },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    profileImage: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        borderWidth: 2,
+        borderColor: COLORS.white,
     },
 });

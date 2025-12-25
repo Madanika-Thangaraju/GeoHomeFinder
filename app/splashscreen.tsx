@@ -5,12 +5,12 @@ import { Image, StyleSheet, View } from 'react-native';
 export default function SplashScreen() {
   const router = useRouter();
 
- useEffect(() => {
-  const timer = setTimeout(() => {
-    return router.replace('/home'); // Change this line
-  }, 2000);
-  return () => clearTimeout(timer);
-}, []); 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      return router.replace('/'); // Redirect to landing page
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <View style={styles.container}>
