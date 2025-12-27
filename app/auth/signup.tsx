@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { CustomInput } from '../../src/components/shared/CustomInput';
 import { GlowButton } from '../../src/components/shared/GlowButton';
@@ -12,9 +12,26 @@ export default function SignupScreen() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [isAgreed, setIsAgreed] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleSignup = () => {
-        router.push('/auth/role-selection');
+        if (!name.trim() || !email.trim() || !password.trim()) {
+            Alert.alert("Wait", "Please enter your details to continue.");
+            return;
+        }
+
+        if (!isAgreed) {
+            Alert.alert("Required", "Please agree to the Terms & Conditions to continue.");
+            return;
+        }
+
+        setIsLoading(true);
+        // Simulate API call
+        setTimeout(() => {
+            setIsLoading(false);
+            router.push('/auth/role-selection');
+        }, 1500);
     };
 
     return (
@@ -27,75 +44,71 @@ export default function SignupScreen() {
                 <View style={{ width: 24 }} />
             </View>
 
-            <Animated.View entering={FadeInUp.delay(100)} style={styles.content}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+            >
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.scrollContent}
+                >
+                    <Animated.View entering={FadeInUp.delay(100)} style={styles.content}>
+                        <Text style={styles.title}>Create Account </Text>
+                        <Text style={styles.subtitle}>Start your journey in GeoHome today 🏠</Text>
 
+                        <View style={styles.form}>
+                            <CustomInput
+                                label="Full Name"
+                                value={name}
+                                onChangeText={setName}
+                                placeholder="e.g. Madhu "
+                                style={styles.inputSpacer}
+                                variant="standard"
+                            />
+                            <CustomInput
+                                label="Email or Phone Number"
+                                value={email}
+                                onChangeText={setEmail}
+                                placeholder="name@example.com"
+                                style={styles.inputSpacer}
+                                variant="standard"
+                            />
+                            <CustomInput
+                                label="Password"
+                                value={password}
+                                onChangeText={setPassword}
+                                placeholder="••••••••"
+                                secureTextEntry
+                                style={styles.inputSpacer}
+                                variant="standard"
+                            />
 
+                            <View style={styles.agreement}>
+                                <TouchableOpacity
+                                    style={[styles.checkbox, isAgreed && styles.checkboxActive]}
+                                    onPress={() => setIsAgreed(!isAgreed)}
+                                >
+                                    {isAgreed && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
+                                </TouchableOpacity>
+                                <Text style={styles.agreementText}>
+                                    I agree to the <Text style={{ color: COLORS.primary }}>Terms & Conditions</Text> and <Text style={{ color: COLORS.primary }}>Privacy Policy</Text>.
+                                </Text>
+                            </View>
 
-                <Text style={styles.title}>Create Account </Text>
-                <Text style={styles.subtitle}>Start your journey in GeoHome today 🏠</Text>
+                            <GlowButton
+                                title={isLoading ? "Creating Account..." : "Create Account"}
+                                onPress={handleSignup}
+                                style={styles.signupBtn}
+                                disabled={isLoading}
+                            />
+                        </View>
 
-                <View style={styles.form}>
-                    <CustomInput
-                        label="Full Name"
-                        value={name}
-                        onChangeText={setName}
-                        placeholder="e.g. Madhu "
-                        style={styles.inputSpacer}
-                        variant="standard"
-                    />
-                    <CustomInput
-                        label="Email or Phone Number"
-                        value={email}
-                        onChangeText={setEmail}
-                        placeholder="name@example.com"
-                        style={styles.inputSpacer}
-                        variant="standard"
-                    />
-                    <CustomInput
-                        label="Password"
-                        value={password}
-                        onChangeText={setPassword}
-                        placeholder="••••••••"
-                        secureTextEntry
-                        style={styles.inputSpacer}
-                        variant="standard"
-                    />
-
-                    <View style={styles.agreement}>
-                        <TouchableOpacity style={styles.checkbox}>
-                            {/* Checkbox placeholder */}
+                        <TouchableOpacity style={styles.loginLink} onPress={() => router.push('/auth/login')}>
+                            <Text style={styles.loginText}>Already have an account? <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>Log In</Text></Text>
                         </TouchableOpacity>
-                        <Text style={styles.agreementText}>
-                            I agree to the <Text style={{ color: COLORS.primary }}>Terms & Conditions</Text> and <Text style={{ color: COLORS.primary }}>Privacy Policy</Text>.
-                        </Text>
-                    </View>
-
-                    <GlowButton
-                        title="Create Account"
-                        onPress={handleSignup}
-                        style={styles.signupBtn}
-                    />
-                    {/* 
-                    <View style={styles.divider}>
-                        <Text style={styles.dividerText}>Or sign up with</Text>
-                    </View> */}
-
-                    {/* <View style={styles.socialRow}>
-                        <TouchableOpacity style={styles.socialBtn}>
-                            <Ionicons name="logo-google" size={20} color="#DB4437" />
-                            <Text style={styles.socialText}>Google</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.socialBtn}>
-                            <Ionicons name="logo-apple" size={20} color="#000000" />
-                            <Text style={styles.socialText}>Apple</Text>
-                        </TouchableOpacity>
-                    </View> */}
-                </View>
-
-                <TouchableOpacity style={styles.loginLink} onPress={() => router.push('/auth/login')}>
-                    <Text style={styles.loginText}>Already have an account? <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>Log In</Text></Text>
-                </TouchableOpacity>
-            </Animated.View>
+                    </Animated.View>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 }
@@ -123,6 +136,9 @@ const styles = StyleSheet.create({
     },
     content: {
         padding: SPACING.l,
+    },
+    scrollContent: {
+        paddingBottom: SPACING.xl,
     },
 
     title: {
@@ -155,6 +171,12 @@ const styles = StyleSheet.create({
         borderColor: COLORS.textSecondary,
         borderRadius: 4,
         marginRight: SPACING.s,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    checkboxActive: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
     },
     agreementText: {
         flex: 1,

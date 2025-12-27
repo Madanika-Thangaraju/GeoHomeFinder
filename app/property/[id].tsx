@@ -1,18 +1,79 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
-import { Dimensions, Image, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { COLORS, LAYOUT } from '../../src/constants/theme';
+import React, { useState } from 'react';
+import { Alert, Dimensions, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { COLORS } from '../../src/constants/theme';
 import { PROPERTIES } from '../../src/data/properties';
 
 const { width, height } = Dimensions.get('window');
+
+// Helper to generate next 7 days
+const getNext7Days = () => {
+    const days = [];
+    const today = new Date();
+    const weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        days.push({
+            id: i,
+            dayName: weekDays[date.getDay()],
+            dayNum: date.getDate(),
+            month: months[date.getMonth()],
+            fullDate: date.toISOString().split('T')[0]
+        });
+    }
+    return days;
+};
+
+const TIME_SLOTS = [
+    '09:00 AM', '10:00 AM', '11:00 AM',
+    '12:00 PM', '02:00 PM', '03:00 PM',
+    '04:00 PM', '05:00 PM', '06:00 PM'
+];
 
 export default function PropertyDetail() {
     const { id } = useLocalSearchParams();
     const router = useRouter();
 
-    const property = PROPERTIES.find(p => p.id === Number(id)) || PROPERTIES[0];
+    const idString = Array.isArray(id) ? id[0] : id;
+    const property = PROPERTIES.find(p => p.id === Number(idString)) || PROPERTIES[0];
+
+    // State for Modal and Selection
+    const [isTourModalVisible, setIsTourModalVisible] = useState(false);
+    const [selectedDate, setSelectedDate] = useState(0);
+    const [userTimeInput, setUserTimeInput] = useState('');
+    const [userMessage, setUserMessage] = useState('');
+    const [isRequesting, setIsRequesting] = useState(false);
+
+    const availableDays = getNext7Days();
+
+    const handleConfirmTour = () => {
+        if (!userTimeInput.trim()) {
+            Alert.alert("Wait", "Please specify a time for your tour.");
+            return;
+        }
+
+        setIsRequesting(true);
+        // Simulate API call
+        setTimeout(() => {
+            setIsRequesting(false);
+            setIsTourModalVisible(false);
+            Alert.alert(
+                "Tour Request Sent!",
+                `Your request for ${availableDays[selectedDate].month} ${availableDays[selectedDate].dayNum} at ${userTimeInput} has been sent to ${property.owner.name}.`,
+                [{
+                    text: "Done", onPress: () => {
+                        setUserTimeInput('');
+                        setUserMessage('');
+                    }
+                }]
+            );
+        }, 1500);
+    };
 
     return (
         <View style={styles.container}>
@@ -173,7 +234,7 @@ export default function PropertyDetail() {
                             </View>
                         </View>
 
-                        <TouchableOpacity style={styles.chatOwnerBtn} onPress={() => router.push({ pathname: '/chat/[id]', params: { id } })}>
+                        <TouchableOpacity style={styles.chatOwnerBtn} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: idString } })}>
                             <Ionicons name="chatbubble-ellipses" size={20} color={COLORS.white} />
                             <Text style={styles.chatOwnerText}>Chat with Owner</Text>
                         </TouchableOpacity>
@@ -189,19 +250,123 @@ export default function PropertyDetail() {
 
             {/* Sticky Bottom Actions */}
             <View style={styles.bottomActions}>
-                <TouchableOpacity style={styles.requestTourBtn}>
+                <TouchableOpacity style={styles.requestTourBtn} onPress={() => setIsTourModalVisible(true)}>
                     <Text style={styles.requestTourText}>Request Tour</Text>
                     <Ionicons name="calendar-outline" size={18} color={COLORS.white} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionCircleBtn} onPress={() => router.push({ pathname: '/chat/[id]', params: { id } })}>
-                    <Ionicons name="chatbubble" size={20} color={COLORS.white} />
-                    <Text style={styles.actionLabel}>CHAT</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionCircleBtn, { backgroundColor: '#DCFCE7' }]}>
                     <Ionicons name="call" size={20} color={COLORS.success} />
                     <Text style={[styles.actionLabel, { color: COLORS.success }]}>CALL</Text>
                 </TouchableOpacity>
             </View>
+
+            {/* TOUR REQUEST CHAT BOX MODAL */}
+            <Modal
+                visible={isTourModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setIsTourModalVisible(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <TouchableOpacity style={styles.modalDismiss} activeOpacity={1} onPress={() => setIsTourModalVisible(false)} />
+                    <View style={styles.chatContainer}>
+                        {/* Chat Header */}
+                        <View style={styles.chatHeader}>
+                            <View style={styles.ownerInfoSmall}>
+                                <Image source={property.owner.image} style={styles.ownerAvatarSmall} />
+                                <View>
+                                    <Text style={styles.ownerNameSmall}>{property.owner.name}</Text>
+                                    <View style={styles.onlineStatusRow}>
+                                        <View style={styles.onlineDot} />
+                                        <Text style={styles.onlineText}>Online</Text>
+                                    </View>
+                                </View>
+                            </View>
+                            <TouchableOpacity onPress={() => setIsTourModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={styles.chatMessages} showsVerticalScrollIndicator={false}>
+                            {/* System Message */}
+                            <View style={styles.messageBubbleSystem}>
+                                <Text style={styles.systemText}>You are requesting a tour for:</Text>
+                                <Text style={styles.systemPropertyTitle}>{property.title}</Text>
+                            </View>
+
+                            {/* User Initial Message */}
+                            <View style={styles.messageBubbleUser}>
+                                <Text style={styles.userMessageText}>Hello! I'd like to schedule a tour of this property. 🏠</Text>
+                            </View>
+
+                            {/* Step 1: Date */}
+                            <View style={styles.stepBubble}>
+                                <Text style={styles.stepTitle}>STEP 1: Pick a Date</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chatDateSelector}>
+                                    {availableDays.map((day, index) => (
+                                        <TouchableOpacity
+                                            key={day.id}
+                                            style={[
+                                                styles.chatDateItem,
+                                                selectedDate === index && styles.chatDateItemActive
+                                            ]}
+                                            onPress={() => setSelectedDate(index)}
+                                        >
+                                            <Text style={[styles.chatDateDay, selectedDate === index && styles.chatDateTextActive]}>{day.dayName}</Text>
+                                            <Text style={[styles.chatDateNum, selectedDate === index && styles.chatDateTextActive]}>{day.dayNum}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+
+                            {/* Step 2: Time */}
+                            <View style={styles.stepBubble}>
+                                <Text style={styles.stepTitle}>STEP 2: What time works best?</Text>
+                                <View style={styles.chatInputWrapper}>
+                                    <Ionicons name="time-outline" size={20} color={COLORS.textSecondary} />
+                                    <TextInput
+                                        style={styles.chatTextInput}
+                                        placeholder="e.g. 10:00 AM or Afternoon"
+                                        placeholderTextColor={COLORS.textSecondary}
+                                        value={userTimeInput}
+                                        onChangeText={setUserTimeInput}
+                                    />
+                                </View>
+                            </View>
+
+                            {/* Step 3: Message */}
+                            <View style={styles.stepBubble}>
+                                <Text style={styles.stepTitle}>STEP 3: Any specific questions? (Optional)</Text>
+                                <TextInput
+                                    style={[styles.chatTextInput, styles.chatMessageInput]}
+                                    placeholder="Type your message here..."
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    multiline
+                                    value={userMessage}
+                                    onChangeText={setUserMessage}
+                                />
+                            </View>
+                        </ScrollView>
+
+                        {/* Send Action */}
+                        <View style={styles.chatFooter}>
+                            <TouchableOpacity
+                                style={[styles.sendTourBtn, (!userTimeInput.trim() || isRequesting) && styles.btnDisabled]}
+                                onPress={handleConfirmTour}
+                                disabled={isRequesting || !userTimeInput.trim()}
+                            >
+                                <Text style={styles.sendTourBtnText}>
+                                    {isRequesting ? 'Sending...' : 'Send Tour Request'}
+                                </Text>
+                                {!isRequesting && <Ionicons name="paper-plane" size={18} color={COLORS.white} />}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </View>
     );
 }
@@ -213,7 +378,7 @@ const styles = StyleSheet.create({
     },
     heroContainer: {
         height: height * 0.45,
-        width: '100%',
+        width: width,
         position: 'relative',
     },
     heroImage: {
@@ -223,20 +388,20 @@ const styles = StyleSheet.create({
     headerBar: {
         position: 'absolute',
         top: 50,
-        left: 20,
-        right: 20,
+        left: 0,
+        right: 0,
         flexDirection: 'row',
         justifyContent: 'space-between',
+        paddingHorizontal: 20,
         zIndex: 10,
     },
     circleBtn: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        backgroundColor: 'rgba(0,0,0,0.3)',
         justifyContent: 'center',
         alignItems: 'center',
-        backdropFilter: 'blur(10px)', // Note: backdropFilter not supported in pure RN, but keeping for intent
     },
     rightIcons: {
         flexDirection: 'row',
@@ -245,9 +410,10 @@ const styles = StyleSheet.create({
     videoTourContainer: {
         position: 'absolute',
         top: '40%',
-        left: '50%',
-        transform: [{ translateX: -40 }, { translateY: -40 }], // Approx center manually
+        left: 0,
+        right: 0,
         alignItems: 'center',
+        zIndex: 5,
     },
     playButton: {
         width: 60,
@@ -256,19 +422,19 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.3)',
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 2,
+        borderWidth: 1,
         borderColor: COLORS.white,
-        marginBottom: 8,
     },
     videoText: {
         color: COLORS.white,
-        fontSize: 10,
-        fontWeight: 'bold',
+        fontSize: 12,
+        fontWeight: '700',
+        marginTop: 8,
         letterSpacing: 1,
     },
     heroContent: {
         position: 'absolute',
-        bottom: 40, // More space for rounded card overlap
+        bottom: 40,
         left: 20,
         right: 20,
     },
@@ -276,21 +442,21 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         alignSelf: 'flex-start',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
         marginBottom: 8,
-        gap: 6,
+        gap: 4,
     },
     matchText: {
         color: COLORS.white,
         fontSize: 12,
-        fontWeight: 'bold',
+        fontWeight: '600',
     },
     propertyTitle: {
+        color: COLORS.white,
         fontSize: 28,
         fontWeight: 'bold',
-        color: COLORS.white,
         marginBottom: 4,
     },
     locationRow: {
@@ -303,14 +469,13 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     detailsCard: {
-        marginTop: -30,
+        flex: 1,
         backgroundColor: COLORS.white,
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
-        paddingHorizontal: 24,
+        marginTop: -30,
         paddingTop: 12,
-        paddingBottom: 40,
-        minHeight: 500,
+        paddingHorizontal: 20,
     },
     dragHandle: {
         width: 40,
@@ -324,14 +489,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 20,
     },
     priceLabel: {
-        fontSize: 10,
+        fontSize: 12,
         color: COLORS.textSecondary,
-        fontWeight: 'bold',
+        fontWeight: '600',
         letterSpacing: 0.5,
-        marginBottom: 4,
     },
     priceValue: {
         fontSize: 24,
@@ -339,15 +503,15 @@ const styles = StyleSheet.create({
         color: COLORS.textPrimary,
     },
     breakdownBtn: {
-        backgroundColor: '#F1F5F9',
         paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 8,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: '#EFF6FF',
     },
     breakdownText: {
-        fontSize: 12,
+        color: COLORS.primary,
+        fontSize: 14,
         fontWeight: '600',
-        color: COLORS.textPrimary,
     },
     divider: {
         height: 1,
@@ -365,43 +529,38 @@ const styles = StyleSheet.create({
     },
     sectionTitle: {
         fontSize: 18,
-        fontWeight: 'bold',
+        fontWeight: '700',
         color: COLORS.textPrimary,
-        marginBottom: 4,
     },
     sectionSubtitle: {
-        fontSize: 12,
+        fontSize: 14,
         color: COLORS.textSecondary,
         marginBottom: 16,
     },
     highlightScroll: {
-        marginHorizontal: -24, // pull out to edge
-        paddingHorizontal: 24, // push content back in
+        flexDirection: 'row',
+        marginHorizontal: -20,
+        paddingHorizontal: 20,
     },
     highlightCard: {
-        width: 100,
-        height: 120,
-        backgroundColor: COLORS.white,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        borderRadius: 16,
-        padding: 12,
+        width: 110,
+        padding: 16,
+        backgroundColor: COLORS.surfaceHighlight,
+        borderRadius: 20,
         marginRight: 12,
-        ...LAYOUT.shadow,
-        shadowOpacity: 0.03,
-        justifyContent: 'center',
+        alignItems: 'center',
     },
     highlightIconBg: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        backgroundColor: '#EFF6FF',
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#DBEAFE',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 12,
     },
     highlightValue: {
-        fontSize: 20,
+        fontSize: 16,
         fontWeight: 'bold',
         color: COLORS.textPrimary,
         marginBottom: 4,
@@ -410,21 +569,22 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: COLORS.textSecondary,
         fontWeight: '600',
+        letterSpacing: 0.5,
     },
     descriptionText: {
-        fontSize: 14,
+        fontSize: 15,
+        lineHeight: 24,
         color: COLORS.textSecondary,
-        lineHeight: 22,
         marginBottom: 8,
     },
     readMore: {
         color: COLORS.primary,
         fontWeight: '600',
-        fontSize: 14,
+        fontSize: 15,
     },
     mapCard: {
+        borderRadius: 24,
         height: 200,
-        borderRadius: 20,
         overflow: 'hidden',
         position: 'relative',
     },
@@ -441,93 +601,95 @@ const styles = StyleSheet.create({
     mapPin: {
         width: 48,
         height: 48,
-        backgroundColor: COLORS.white,
         borderRadius: 24,
+        backgroundColor: COLORS.white,
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
         marginBottom: 12,
-        ...LAYOUT.shadow,
     },
     exploreBtn: {
         backgroundColor: COLORS.white,
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
-        ...LAYOUT.shadow,
     },
     exploreText: {
-        fontSize: 12,
-        fontWeight: 'bold',
         color: COLORS.textPrimary,
+        fontSize: 13,
+        fontWeight: '600',
     },
     ownerCard: {
-        backgroundColor: COLORS.white,
+        backgroundColor: COLORS.surfaceHighlight,
         borderRadius: 24,
         padding: 20,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        ...LAYOUT.shadow,
-        shadowOpacity: 0.05,
+        marginTop: 8,
     },
     ownerHeader: {
         flexDirection: 'row',
         marginBottom: 20,
     },
     ownerAvatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
         backgroundColor: '#E2E8F0',
     },
     ownerName: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         color: COLORS.textPrimary,
-        marginRight: 8,
     },
     ratingBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FEF3C7',
-        paddingHorizontal: 6,
+        paddingHorizontal: 8,
         paddingVertical: 2,
-        borderRadius: 4,
-        gap: 2,
+        borderRadius: 8,
+        marginLeft: 8,
+        gap: 4,
     },
     ratingText: {
-        fontSize: 10,
-        fontWeight: 'bold',
+        fontSize: 12,
+        fontWeight: '600',
         color: '#B45309',
     },
     ownerRole: {
-        fontSize: 10,
+        fontSize: 12,
         color: COLORS.textSecondary,
+        fontWeight: '600',
         marginTop: 2,
     },
     reviewCount: {
-        fontSize: 10,
-        color: COLORS.textSecondary,
+        fontSize: 12,
+        color: COLORS.primary,
+        fontWeight: '500',
         marginTop: 2,
     },
     chatOwnerBtn: {
-        backgroundColor: '#6366F1',
+        backgroundColor: COLORS.primary,
         flexDirection: 'row',
-        justifyContent: 'center',
         alignItems: 'center',
+        justifyContent: 'center',
         paddingVertical: 14,
-        borderRadius: 12,
+        borderRadius: 16,
         gap: 8,
-        marginBottom: 16,
     },
     chatOwnerText: {
         color: COLORS.white,
-        fontWeight: 'bold',
         fontSize: 16,
+        fontWeight: '600',
     },
     replyStatus: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        marginTop: 12,
         gap: 6,
     },
     statusDot: {
@@ -537,47 +699,239 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.success,
     },
     statusText: {
-        fontSize: 10,
+        fontSize: 12,
         color: COLORS.textSecondary,
     },
     bottomActions: {
         position: 'absolute',
-        bottom: 20,
-        left: 20,
-        right: 20,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: COLORS.white,
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        paddingBottom: 34,
         flexDirection: 'row',
         gap: 12,
-        zIndex: 100,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 10,
     },
     requestTourBtn: {
         flex: 1,
-        backgroundColor: '#0F172A',
+        backgroundColor: COLORS.primary,
+        height: 56,
+        borderRadius: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 30, // Pill shape
-        paddingVertical: 16,
         gap: 8,
-        ...LAYOUT.shadow,
     },
     requestTourText: {
         color: COLORS.white,
-        fontWeight: 'bold',
         fontSize: 16,
+        fontWeight: 'bold',
     },
     actionCircleBtn: {
         width: 56,
         height: 56,
-        borderRadius: 28,
-        backgroundColor: '#6366F1',
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
-        ...LAYOUT.shadow,
     },
     actionLabel: {
-        fontSize: 8,
-        fontWeight: 'bold',
-        color: COLORS.white,
+        fontSize: 10,
+        fontWeight: '700',
         marginTop: 2,
-    }
+    },
+    // Modal & Base Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalDismiss: {
+        flex: 1,
+    },
+    btnDisabled: {
+        opacity: 0.5,
+    },
+    // Chat Box Redesign Styles
+    chatContainer: {
+        backgroundColor: COLORS.white,
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        height: height * 0.85,
+        width: '100%',
+    },
+    chatHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    ownerInfoSmall: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    ownerAvatarSmall: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+    },
+    ownerNameSmall: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    onlineStatusRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    onlineDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: COLORS.success,
+    },
+    onlineText: {
+        fontSize: 12,
+        color: COLORS.textSecondary,
+    },
+    chatMessages: {
+        flex: 1,
+        padding: 20,
+    },
+    messageBubbleSystem: {
+        backgroundColor: '#F8FAFC',
+        padding: 12,
+        borderRadius: 12,
+        alignSelf: 'center',
+        marginBottom: 20,
+        width: '100%',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    systemText: {
+        fontSize: 12,
+        color: COLORS.textSecondary,
+    },
+    systemPropertyTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: COLORS.primary,
+        marginTop: 4,
+    },
+    messageBubbleUser: {
+        backgroundColor: COLORS.primary,
+        padding: 16,
+        borderRadius: 20,
+        borderBottomRightRadius: 4,
+        alignSelf: 'flex-end',
+        marginBottom: 24,
+        maxWidth: '85%',
+    },
+    userMessageText: {
+        color: COLORS.white,
+        fontSize: 15,
+        lineHeight: 20,
+    },
+    stepBubble: {
+        backgroundColor: '#F1F5F9',
+        padding: 16,
+        borderRadius: 20,
+        borderBottomLeftRadius: 4,
+        alignSelf: 'flex-start',
+        marginBottom: 20,
+        width: '90%',
+    },
+    stepTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: COLORS.textSecondary,
+        marginBottom: 12,
+        letterSpacing: 0.5,
+    },
+    chatDateSelector: {
+        flexDirection: 'row',
+    },
+    chatDateItem: {
+        width: 50,
+        height: 60,
+        borderRadius: 12,
+        backgroundColor: COLORS.white,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
+    },
+    chatDateItemActive: {
+        backgroundColor: COLORS.primary,
+    },
+    chatDateDay: {
+        fontSize: 10,
+        color: COLORS.textSecondary,
+        fontWeight: '600',
+    },
+    chatDateNum: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    chatDateTextActive: {
+        color: COLORS.white,
+    },
+    chatInputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.white,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        height: 50,
+        gap: 8,
+    },
+    chatTextInput: {
+        flex: 1,
+        fontSize: 15,
+        color: COLORS.textPrimary,
+    },
+    chatMessageInput: {
+        height: 80,
+        paddingTop: 12,
+        textAlignVertical: 'top',
+        backgroundColor: COLORS.white,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+    },
+    chatFooter: {
+        padding: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+    },
+    sendTourBtn: {
+        backgroundColor: COLORS.primary,
+        height: 56,
+        borderRadius: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    sendTourBtnText: {
+        color: COLORS.white,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
 });
+
+
+

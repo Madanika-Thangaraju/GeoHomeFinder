@@ -28,6 +28,14 @@ export default function RentalPreferencesScreen() {
     const [selectedPropertyType, setSelectedPropertyType] = useState('apartment');
     const [selectedConfig, setSelectedConfig] = useState('2 BHK');
 
+    const handleReset = () => {
+        setPurpose('Rent');
+        setMinBudget('0');
+        setMaxBudget('0');
+        setSelectedPropertyType('');
+        setSelectedConfig('');
+    };
+
     return (
         <View style={styles.container}>
             {/* Header */}
@@ -36,7 +44,7 @@ export default function RentalPreferencesScreen() {
                     <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Rental Preferences</Text>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={handleReset}>
                     <Text style={styles.resetText}>Reset</Text>
                 </TouchableOpacity>
             </View>

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { CustomInput } from '../../src/components/shared/CustomInput';
 import { GlowButton } from '../../src/components/shared/GlowButton';
@@ -13,9 +13,21 @@ export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleLogin = () => {
-        router.push('/auth/role-selection');
+        if (!email.trim() || !password.trim()) {
+            Alert.alert("Wait", "Please enter your details to continue.");
+            return;
+        }
+
+        setIsLoading(true);
+        // Simulate API call
+        setTimeout(() => {
+            setIsLoading(true);
+            router.push('/auth/role-selection');
+            setIsLoading(false);
+        }, 1500);
     };
 
     return (
@@ -31,101 +43,93 @@ export default function LoginScreen() {
                 <View style={{ width: 40 }} />
             </View>
 
-            {/* Subtle Top Gradient for depth */}
             <LinearGradient
                 colors={['#F1F5F9', '#FFFFFF']}
                 style={styles.topGradient}
             />
 
-            <Animated.View entering={FadeInUp.delay(100)} style={styles.content}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+            >
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.scrollContent}
+                >
+                    <Animated.View entering={FadeInUp.delay(100)} style={styles.content}>
+                        {/* Brand Logo/Icon Highlight */}
+                        <View style={styles.logoContainer}>
+                            <View style={styles.logoCircle}>
+                                <Ionicons name="home" size={32} color={COLORS.primary} />
+                            </View>
+                        </View>
 
+                        <Text style={styles.title}>Welcome Back</Text>
+                        <Text style={styles.subtitle}>Login to discover homes that match you.</Text>
 
+                        <View style={styles.toggleContainer}>
+                            <TouchableOpacity
+                                style={[styles.toggleBtn, loginMethod === 'email' && styles.toggleBtnActive]}
+                                onPress={() => setLoginMethod('email')}
+                            >
+                                <Text style={[styles.toggleText, loginMethod === 'email' && styles.toggleTextActive]}>Email</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.toggleBtn, loginMethod === 'phone' && styles.toggleBtnActive]}
+                                onPress={() => setLoginMethod('phone')}
+                            >
+                                <Text style={[styles.toggleText, loginMethod === 'phone' && styles.toggleTextActive]}>Phone Number</Text>
+                            </TouchableOpacity>
+                        </View>
 
-                {/* Brand Logo/Icon Highlight */}
-                <View style={styles.logoContainer}>
-                    <View style={styles.logoCircle}>
-                        <Ionicons name="home" size={32} color={COLORS.primary} />
-                    </View>
-                </View>
+                        <View style={styles.form}>
+                            <CustomInput
+                                label={loginMethod === 'email' ? "Email Address" : "Phone Number"}
+                                value={email}
+                                onChangeText={setEmail}
+                                placeholder={loginMethod === 'email' ? "hello@example.com" : "+91 98765 43210"}
+                                keyboardType={loginMethod === 'email' ? "email-address" : "phone-pad"}
+                                style={styles.inputSpacer}
+                                variant="standard"
+                            />
+                            <CustomInput
+                                label="Password"
+                                value={password}
+                                onChangeText={setPassword}
+                                placeholder="••••••••"
+                                secureTextEntry
+                                style={styles.inputSpacer}
+                                variant="standard"
+                            />
 
-                <Text style={styles.title}>Welcome Back</Text>
-                <Text style={styles.subtitle}>Login to discover homes that match you.</Text>
+                            <TouchableOpacity style={styles.forgotPassword}>
+                                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                            </TouchableOpacity>
 
-                <View style={styles.toggleContainer}>
-                    <TouchableOpacity
-                        style={[styles.toggleBtn, loginMethod === 'email' && styles.toggleBtnActive]}
-                        onPress={() => setLoginMethod('email')}
-                    >
-                        <Text style={[styles.toggleText, loginMethod === 'email' && styles.toggleTextActive]}>Email</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.toggleBtn, loginMethod === 'phone' && styles.toggleBtnActive]}
-                        onPress={() => setLoginMethod('phone')}
-                    >
-                        <Text style={[styles.toggleText, loginMethod === 'phone' && styles.toggleTextActive]}>Phone Number</Text>
-                    </TouchableOpacity>
-                </View>
+                            <GlowButton
+                                title={isLoading ? "Logging in..." : "Login"}
+                                onPress={handleLogin}
+                                style={styles.loginBtn}
+                                disabled={isLoading}
+                            />
+                        </View>
 
-                <View style={styles.form}>
-                    <CustomInput
-                        label={loginMethod === 'email' ? "Email Address" : "Phone Number"}
-                        value={email}
-                        onChangeText={setEmail}
-                        placeholder={loginMethod === 'email' ? "hello@example.com" : "+91 98765 43210"}
-                        keyboardType={loginMethod === 'email' ? "email-address" : "phone-pad"}
-                        style={styles.inputSpacer}
-                        variant="standard"
-                    />
-                    <CustomInput
-                        label="Password"
-                        value={password}
-                        onChangeText={setPassword}
-                        placeholder="••••••••"
-                        secureTextEntry
-                        style={styles.inputSpacer}
-                        variant="standard"
-                    />
-
-                    <TouchableOpacity style={styles.forgotPassword}>
-                        <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-                    </TouchableOpacity>
-
-                    <GlowButton
-                        title="Login"
-                        onPress={handleLogin}
-                        style={styles.loginBtn}
-                    />
-
-                    {/* <View style={styles.divider}>
-                        <Text style={styles.dividerText}>Or continue with</Text>
-                    </View> */}
-
-                    {/* <View style={styles.socialRow}>
-                        <TouchableOpacity style={styles.socialBtn}>
-                            <Ionicons name="logo-google" size={20} color="#DB4437" />
-                            <Text style={styles.socialText}>Google</Text>
+                        <TouchableOpacity style={styles.signupLink} onPress={() => router.push('/auth/signup')}>
+                            <Text style={styles.signupText}>New to GeoHomeFinder? <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>Sign Up</Text></Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.socialBtn}>
-                            <Ionicons name="logo-apple" size={20} color="#000000" />
-                            <Text style={styles.socialText}>Apple</Text>
-                        </TouchableOpacity>
-                    </View> */}
-                </View>
 
-                <TouchableOpacity style={styles.signupLink} onPress={() => router.push('/auth/signup')}>
-                    <Text style={styles.signupText}>New to GeoHomeFinder? <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>Sign Up</Text></Text>
-                </TouchableOpacity>
-
-                {/* Footer Section to fill space */}
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>By continuing, you agree to our</Text>
-                    <View style={styles.footerLinks}>
-                        <Text style={styles.footerLink}>Terms of Service</Text>
-                        <Text style={styles.footerDivider}>•</Text>
-                        <Text style={styles.footerLink}>Privacy Policy</Text>
-                    </View>
-                </View>
-            </Animated.View>
+                        {/* Footer Section to fill space */}
+                        <View style={styles.footer}>
+                            <Text style={styles.footerText}>By continuing, you agree to our</Text>
+                            <View style={styles.footerLinks}>
+                                <Text style={styles.footerLink}>Terms of Service</Text>
+                                <Text style={styles.footerDivider}>•</Text>
+                                <Text style={styles.footerLink}>Privacy Policy</Text>
+                            </View>
+                        </View>
+                    </Animated.View>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 }
@@ -175,6 +179,9 @@ const styles = StyleSheet.create({
     },
     content: {
         padding: SPACING.l,
+    },
+    scrollContent: {
+        paddingBottom: SPACING.xl,
     },
 
     logoContainer: {

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, SPACING } from '../../src/constants/theme';
 
 export default function OwnerProfile() {
@@ -24,6 +24,17 @@ export default function OwnerProfile() {
     const handleSaveProfile = () => {
         setUserData({ ...editData });
         setShowEditProfile(false);
+    };
+
+    const handleLogout = () => {
+        Alert.alert(
+            "Log Out",
+            "Are you sure you want to log out of your account?",
+            [
+                { text: "Cancel", style: "cancel" },
+                { text: "Log Out", style: "destructive", onPress: () => router.replace('/') }
+            ]
+        );
     };
 
     const StatItem = ({ value, label, rating }: { value: string; label: string; rating?: boolean }) => (
@@ -162,7 +173,7 @@ export default function OwnerProfile() {
                 </View>
 
                 {/* Logout */}
-                <TouchableOpacity style={styles.logoutBtn} onPress={() => router.replace('/')}>
+                <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                     <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
                     <Text style={styles.logoutText}>Log Out</Text>
                 </TouchableOpacity>
