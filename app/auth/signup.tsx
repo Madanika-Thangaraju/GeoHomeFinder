@@ -6,33 +6,39 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import { CustomInput } from '../../src/components/shared/CustomInput';
 import { GlowButton } from '../../src/components/shared/GlowButton';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
+import { registerTenant } from "../../src/services/service";
 
 export default function SignupScreen() {
     const router = useRouter();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
+    const [phone , setPhone] = useState('');
     const [password, setPassword] = useState('');
     const [isAgreed, setIsAgreed] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleSignup = () => {
-        if (!name.trim() || !email.trim() || !password.trim()) {
-            Alert.alert("Wait", "Please enter your details to continue.");
-            return;
-        }
+    const handleSignup = async () => {
+    if (!name || !phone || !password) {
+        alert("Name, phone and password are required");
+        return;
+    }
 
-        if (!isAgreed) {
-            Alert.alert("Required", "Please agree to the Terms & Conditions to continue.");
-            return;
-        }
+    try {
+        const response = await registerTenant({
+        name,
+        email,
+        phone,
+        password,
+        });
 
-        setIsLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-            setIsLoading(false);
-            router.push('/auth/role-selection');
-        }, 1500);
+        console.log("Signup success:", response);
+
+        router.push("/auth/role-selection");
+    } catch (error: any) {
+        alert(error.message);
+    }
     };
+
 
     return (
         <View style={styles.container}>
@@ -103,8 +109,46 @@ export default function SignupScreen() {
                             />
                         </View>
 
-                        <TouchableOpacity style={styles.loginLink} onPress={() => router.push('/auth/login')}>
-                            <Text style={styles.loginText}>Already have an account? <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>Log In</Text></Text>
+                <View style={styles.form}>
+                    <CustomInput
+                        label="Full Name"
+                        value={name}
+                        onChangeText={setName}
+                        placeholder="e.g. Madhu "
+                        style={styles.inputSpacer}
+                        variant="standard"
+                    />
+                    <CustomInput
+                        label="Email"
+                        value={email}
+                        onChangeText={setEmail}
+                        placeholder="name@example.com"
+                        style={styles.inputSpacer}
+                        variant="standard"
+                    />
+
+                     <CustomInput
+                        label="Phone Number"
+                        value={phone}
+                        onChangeText={setPhone}
+                        placeholder="9125261526"
+                        style={styles.inputSpacer}
+                        variant="standard"
+                    />
+
+                    <CustomInput
+                        label="Password"
+                        value={password}
+                        onChangeText={setPassword}
+                        placeholder="••••••••"
+                        secureTextEntry
+                        style={styles.inputSpacer}
+                        variant="standard"
+                    />
+
+                    <View style={styles.agreement}>
+                        <TouchableOpacity style={styles.checkbox}>
+                            {/* Checkbox placeholder */}
                         </TouchableOpacity>
                     </Animated.View>
                 </ScrollView>
