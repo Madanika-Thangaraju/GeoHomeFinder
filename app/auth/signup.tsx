@@ -1,52 +1,65 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { CustomInput } from '../../src/components/shared/CustomInput';
 import { GlowButton } from '../../src/components/shared/GlowButton';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
-import { registerTenant } from "../../src/services/service";
+import { registerTenant } from '../../src/services/service';
 
 export default function SignupScreen() {
     const router = useRouter();
+
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
-    const [phone , setPhone] = useState('');
+    const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
     const [isAgreed, setIsAgreed] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSignup = async () => {
-    if (!name || !phone || !password) {
-        alert("Name, phone and password are required");
-        return;
-    }
+        if (!name || !phone || !password) {
+            alert('Name, phone and password are required');
+            return;
+        }
 
-    try {
-        const response = await registerTenant({
-        name,
-        email,
-        phone,
-        password,
-        });
+        try {
+            setIsLoading(true);
 
-        console.log("Signup success:", response);
+            await registerTenant({
+                name,
+                email,
+                phone,
+                password,
+            });
 
-        router.push("/auth/role-selection");
-    } catch (error: any) {
-        alert(error.message);
-    }
+            router.push('/auth/role-selection');
+        } catch (error: any) {
+            alert(error.message || 'Signup failed');
+        } finally {
+            setIsLoading(false);
+        }
     };
-
 
     return (
         <View style={styles.container}>
+            {/* HEADER */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
                 </TouchableOpacity>
+
                 <Text style={styles.headerTitle}>Sign Up</Text>
+
                 <View style={{ width: 24 }} />
             </View>
 
@@ -59,26 +72,39 @@ export default function SignupScreen() {
                     contentContainerStyle={styles.scrollContent}
                 >
                     <Animated.View entering={FadeInUp.delay(100)} style={styles.content}>
-                        <Text style={styles.title}>Create Account </Text>
-                        <Text style={styles.subtitle}>Start your journey in GeoHome today 🏠</Text>
+                        <Text style={styles.title}>Create Account</Text>
+                        <Text style={styles.subtitle}>
+                            Start your journey in GeoHome today 🏠
+                        </Text>
 
                         <View style={styles.form}>
                             <CustomInput
                                 label="Full Name"
                                 value={name}
                                 onChangeText={setName}
-                                placeholder="e.g. Madhu "
+                                placeholder="e.g. Madhu"
                                 style={styles.inputSpacer}
                                 variant="standard"
                             />
+
                             <CustomInput
-                                label="Email or Phone Number"
+                                label="Email"
                                 value={email}
                                 onChangeText={setEmail}
                                 placeholder="name@example.com"
                                 style={styles.inputSpacer}
                                 variant="standard"
                             />
+
+                            <CustomInput
+                                label="Phone Number"
+                                value={phone}
+                                onChangeText={setPhone}
+                                placeholder="9125261526"
+                                style={styles.inputSpacer}
+                                variant="standard"
+                            />
+
                             <CustomInput
                                 label="Password"
                                 value={password}
@@ -91,65 +117,45 @@ export default function SignupScreen() {
 
                             <View style={styles.agreement}>
                                 <TouchableOpacity
-                                    style={[styles.checkbox, isAgreed && styles.checkboxActive]}
+                                    style={[
+                                        styles.checkbox,
+                                        isAgreed && styles.checkboxActive,
+                                    ]}
                                     onPress={() => setIsAgreed(!isAgreed)}
                                 >
-                                    {isAgreed && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
+                                    {isAgreed && (
+                                        <Ionicons
+                                            name="checkmark"
+                                            size={14}
+                                            color={COLORS.white}
+                                        />
+                                    )}
                                 </TouchableOpacity>
+
                                 <Text style={styles.agreementText}>
-                                    I agree to the <Text style={{ color: COLORS.primary }}>Terms & Conditions</Text> and <Text style={{ color: COLORS.primary }}>Privacy Policy</Text>.
+                                    I agree to the{' '}
+                                    <Text style={{ color: COLORS.primary }}>
+                                        Terms & Conditions
+                                    </Text>{' '}
+                                    and{' '}
+                                    <Text style={{ color: COLORS.primary }}>
+                                        Privacy Policy
+                                    </Text>
+                                    .
                                 </Text>
                             </View>
 
                             <GlowButton
-                                title={isLoading ? "Creating Account..." : "Create Account"}
+                                title={
+                                    isLoading
+                                        ? 'Creating Account...'
+                                        : 'Create Account'
+                                }
                                 onPress={handleSignup}
                                 style={styles.signupBtn}
                                 disabled={isLoading}
                             />
                         </View>
-
-                <View style={styles.form}>
-                    <CustomInput
-                        label="Full Name"
-                        value={name}
-                        onChangeText={setName}
-                        placeholder="e.g. Madhu "
-                        style={styles.inputSpacer}
-                        variant="standard"
-                    />
-                    <CustomInput
-                        label="Email"
-                        value={email}
-                        onChangeText={setEmail}
-                        placeholder="name@example.com"
-                        style={styles.inputSpacer}
-                        variant="standard"
-                    />
-
-                     <CustomInput
-                        label="Phone Number"
-                        value={phone}
-                        onChangeText={setPhone}
-                        placeholder="9125261526"
-                        style={styles.inputSpacer}
-                        variant="standard"
-                    />
-
-                    <CustomInput
-                        label="Password"
-                        value={password}
-                        onChangeText={setPassword}
-                        placeholder="••••••••"
-                        secureTextEntry
-                        style={styles.inputSpacer}
-                        variant="standard"
-                    />
-
-                    <View style={styles.agreement}>
-                        <TouchableOpacity style={styles.checkbox}>
-                            {/* Checkbox placeholder */}
-                        </TouchableOpacity>
                     </Animated.View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -184,7 +190,6 @@ const styles = StyleSheet.create({
     scrollContent: {
         paddingBottom: SPACING.xl,
     },
-
     title: {
         fontSize: 28,
         fontWeight: 'bold',
@@ -230,39 +235,5 @@ const styles = StyleSheet.create({
     },
     signupBtn: {
         borderRadius: LAYOUT.radius.m,
-    },
-    divider: {
-        alignItems: 'center',
-        marginVertical: SPACING.l,
-    },
-    dividerText: {
-        color: COLORS.textSecondary,
-        fontSize: 14,
-    },
-    socialRow: {
-        flexDirection: 'row',
-        gap: SPACING.m,
-        marginBottom: SPACING.xl,
-    },
-    socialBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        paddingVertical: 12,
-        borderRadius: LAYOUT.radius.m,
-        gap: 8,
-    },
-    socialText: {
-        fontWeight: '600',
-        color: COLORS.textPrimary,
-    },
-    loginLink: {
-        alignItems: 'center',
-    },
-    loginText: {
-        color: COLORS.textSecondary,
     },
 });
