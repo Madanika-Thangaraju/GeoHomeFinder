@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 
 export default function ProfileScreen() {
@@ -27,6 +27,17 @@ export default function ProfileScreen() {
     const handleSaveProfile = () => {
         setUserData({ ...editData });
         setShowEditProfile(false);
+    };
+
+    const handleLogout = () => {
+        Alert.alert(
+            "Log Out",
+            "Are you sure you want to log out of your account?",
+            [
+                { text: "Cancel", style: "cancel" },
+                { text: "Log Out", style: "destructive", onPress: () => router.replace('/') }
+            ]
+        );
     };
 
     const StatItem = ({ count, label, icon, color }: any) => (
@@ -178,7 +189,7 @@ export default function ProfileScreen() {
                         <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
                     </TouchableOpacity>
                     <View style={styles.menuDivider} />
-                    <TouchableOpacity style={styles.menuItem} onPress={() => router.replace('/')}>
+                    <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
                         <View style={[styles.menuIconBox, { backgroundColor: '#FEF2F2' }]}>
                             <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
                         </View>

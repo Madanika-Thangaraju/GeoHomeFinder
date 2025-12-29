@@ -19,18 +19,36 @@ export default function TenantDashboard() {
     const [searchMode, setSearchMode] = useState('pin');
 
     // Simple interaction to simulate slider movement (toggle between values on tap)
-    const toggleRadius = () => {
-        setRadius(prev => {
-            if (prev === 1.5) return 3.0;
-            if (prev === 3.0) return 5.0;
-            return 1.5;
-        });
+    // Improve interaction to allow setting specific values based on tap position
+    const handleSliderPress = (event: any) => {
+        const { locationX } = event.nativeEvent;
+        const sliderWidth = width - (SPACING.l * 2);
+        const percent = locationX / sliderWidth;
+
+        if (percent < 0.33) setRadius(1.5);
+        else if (percent < 0.66) setRadius(3.0);
+        else setRadius(5.0);
     };
 
     const getKnobPosition = () => {
         if (radius === 1.5) return '10%';
-        if (radius === 3.0) return '45%';
-        return '80%';
+        if (radius === 3.0) return '47%';
+        return '84%';
+    };
+
+    const getCircleStyle = () => {
+        // Map 1.5km to ~150px, 3.0km to ~250px, 5.0km to ~400px
+        let size = 250;
+        if (radius === 1.5) size = 150;
+        if (radius === 5.0) size = 400;
+
+        return {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            top: 40 * Dimensions.get('window').height / 100 - (size / 2),
+            left: 50 * width / 100 - (size / 2),
+        };
     };
 
     return (
@@ -80,7 +98,7 @@ export default function TenantDashboard() {
                 />
 
                 {/* Map UI Elements */}
-                <View style={styles.radiusCircle} />
+                <View style={[styles.radiusCircle, getCircleStyle()]} />
                 <View style={[styles.mapPin, { top: '40%', left: '50%' }]}>
                     <Ionicons name="home" size={16} color={COLORS.white} />
                 </View>
@@ -123,9 +141,9 @@ export default function TenantDashboard() {
                     <Text style={styles.sliderValue}>{radius} km</Text>
                 </View>
                 {/* Interactive Slider Area */}
-                <TouchableOpacity activeOpacity={0.9} onPress={toggleRadius} style={{ marginBottom: SPACING.l }}>
+                <TouchableOpacity activeOpacity={0.9} onPress={handleSliderPress} style={{ marginBottom: SPACING.l }}>
                     <View style={styles.sliderLine}>
-                        <View style={[styles.sliderKnob, { marginLeft: getKnobPosition() }]} />
+                        <View style={[styles.sliderKnob, { left: getKnobPosition() }]} />
                     </View>
                 </TouchableOpacity>
 
@@ -260,14 +278,9 @@ const styles = StyleSheet.create({
     },
     radiusCircle: {
         position: 'absolute',
-        top: '20%',
-        left: '10%',
-        width: '80%',
-        height: 300,
-        borderRadius: 150,
         borderWidth: 2,
-        borderColor: 'rgba(37, 99, 235, 0.3)',
-        backgroundColor: 'rgba(37, 99, 235, 0.05)',
+        borderColor: 'rgba(37, 99, 235, 0.4)',
+        backgroundColor: 'rgba(37, 99, 235, 0.1)',
     },
     mapPin: {
         position: 'absolute',
@@ -361,11 +374,12 @@ const styles = StyleSheet.create({
         // marginBottom: SPACING.l, // Removed since wrapped in Touchable
     },
     sliderKnob: {
-        width: 16,
-        height: 16,
-        borderRadius: 8,
+        position: 'absolute',
+        width: 20,
+        height: 20,
+        borderRadius: 10,
         backgroundColor: COLORS.primary,
-        marginTop: -6,
+        top: -8,
         borderWidth: 2,
         borderColor: COLORS.white,
         ...LAYOUT.shadow,
