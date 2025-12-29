@@ -7,27 +7,140 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import { CustomInput } from '../../src/components/shared/CustomInput';
 import { GlowButton } from '../../src/components/shared/GlowButton';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
+import { loginUser } from '../../src/services/service';
 
 export default function LoginScreen() {
     const router = useRouter();
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
     const [isLoading, setIsLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
-    const handleLogin = () => {
-        if (!email.trim() || !password.trim()) {
-            Alert.alert("Wait", "Please enter your details to continue.");
+    // Validation errors
+    const [errors, setErrors] = useState({
+        identifier: '',
+        password: '',
+    });
+
+    // Validation functions
+    const validateEmail = (value: string) => {
+        if (!value.trim()) {
+            return 'Email is required';
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(value)) {
+            return 'Please enter a valid email address';
+        }
+        return '';
+    };
+
+    const validatePhone = (value: string) => {
+        if (!value.trim()) {
+            return 'Phone number is required';
+        }
+        const phoneRegex = /^\d{10}$/;
+        if (!phoneRegex.test(value)) {
+            return 'Phone number must be exactly 10 digits';
+        }
+        return '';
+    };
+
+    const validateIdentifier = (value: string) => {
+        if (!value.trim()) {
+            return loginMethod === 'email' ? 'Email is required' : 'Phone number is required';
+        }
+        
+        if (loginMethod === 'email') {
+            return validateEmail(value);
+        } else {
+            return validatePhone(value);
+        }
+    };
+
+    const validatePassword = (value: string) => {
+        if (!value) {
+            return 'Password is required';
+        }
+        if (value.length < 6) {
+            return 'Password must be at least 6 characters';
+        }
+        return '';
+    };
+
+    // Real-time validation handlers
+    const handleIdentifierChange = (value: string) => {
+        if (loginMethod === 'phone') {
+            // Only allow digits for phone
+            const digitsOnly = value.replace(/\D/g, '');
+            setIdentifier(digitsOnly);
+            if (errors.identifier) {
+                setErrors({ ...errors, identifier: validatePhone(digitsOnly) });
+            }
+        } else {
+            setIdentifier(value);
+            if (errors.identifier) {
+                setErrors({ ...errors, identifier: validateEmail(value) });
+            }
+        }
+    };
+
+    const handlePasswordChange = (value: string) => {
+        setPassword(value);
+        if (errors.password) {
+            setErrors({ ...errors, password: validatePassword(value) });
+        }
+    };
+
+    const handleMethodChange = (method: 'email' | 'phone') => {
+        setLoginMethod(method);
+        setIdentifier('');
+        setErrors({ identifier: '', password: '' });
+    };
+
+    const handleLogin = async () => {
+        // Validate all fields
+        const identifierError = validateIdentifier(identifier);
+        const passwordError = validatePassword(password);
+
+        setErrors({
+            identifier: identifierError,
+            password: passwordError,
+        });
+
+        // If any errors, don't proceed
+        if (identifierError || passwordError) {
             return;
         }
 
-        setIsLoading(true);
-        // Simulate API call
-        setTimeout(() => {
+        try {
             setIsLoading(true);
-            router.push('/auth/role-selection');
+
+            const result = await loginUser({
+                identifier,
+                password,
+            });
+
+            // Success toast
+            Alert.alert(
+                'Welcome Back! 👋',
+                'You have logged in successfully!',
+                [
+                    {
+                        text: 'Continue',
+                        onPress: () => router.push('/auth/role-selection'),
+                    },
+                ]
+            );
+        } catch (error: any) {
+            // Show error message from server
+            Alert.alert(
+                'Login Failed',
+                error.message || 'Invalid credentials. Please try again.'
+            );
+        } finally {
             setIsLoading(false);
-        }, 1500);
+        }
     };
 
     return (
@@ -70,13 +183,13 @@ export default function LoginScreen() {
                         <View style={styles.toggleContainer}>
                             <TouchableOpacity
                                 style={[styles.toggleBtn, loginMethod === 'email' && styles.toggleBtnActive]}
-                                onPress={() => setLoginMethod('email')}
+                                onPress={() => handleMethodChange('email')}
                             >
                                 <Text style={[styles.toggleText, loginMethod === 'email' && styles.toggleTextActive]}>Email</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.toggleBtn, loginMethod === 'phone' && styles.toggleBtnActive]}
-                                onPress={() => setLoginMethod('phone')}
+                                onPress={() => handleMethodChange('phone')}
                             >
                                 <Text style={[styles.toggleText, loginMethod === 'phone' && styles.toggleTextActive]}>Phone Number</Text>
                             </TouchableOpacity>
@@ -85,22 +198,43 @@ export default function LoginScreen() {
                         <View style={styles.form}>
                             <CustomInput
                                 label={loginMethod === 'email' ? "Email Address" : "Phone Number"}
-                                value={email}
-                                onChangeText={setEmail}
-                                placeholder={loginMethod === 'email' ? "hello@example.com" : "+91 98765 43210"}
+                                value={identifier}
+                                onChangeText={handleIdentifierChange}
+                                placeholder={loginMethod === 'email' ? "hello@example.com" : "9125261526"}
                                 keyboardType={loginMethod === 'email' ? "email-address" : "phone-pad"}
                                 style={styles.inputSpacer}
                                 variant="standard"
+                                autoCapitalize={loginMethod === 'email' ? 'none' : 'none'}
+                                maxLength={loginMethod === 'phone' ? 10 : undefined}
                             />
-                            <CustomInput
-                                label="Password"
-                                value={password}
-                                onChangeText={setPassword}
-                                placeholder="••••••••"
-                                secureTextEntry
-                                style={styles.inputSpacer}
-                                variant="standard"
-                            />
+                            {errors.identifier ? (
+                                <Text style={styles.errorText}>{errors.identifier}</Text>
+                            ) : null}
+
+                            <View>
+                                <CustomInput
+                                    label="Password"
+                                    value={password}
+                                    onChangeText={handlePasswordChange}
+                                    placeholder="••••••••"
+                                    secureTextEntry={!showPassword}
+                                    style={styles.inputSpacer}
+                                    variant="standard"
+                                />
+                                <TouchableOpacity
+                                    style={styles.eyeIcon}
+                                    onPress={() => setShowPassword(!showPassword)}
+                                >
+                                    <Ionicons
+                                        name={showPassword ? 'eye-off' : 'eye'}
+                                        size={20}
+                                        color={COLORS.textSecondary}
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                            {errors.password ? (
+                                <Text style={styles.errorText}>{errors.password}</Text>
+                            ) : null}
 
                             <TouchableOpacity style={styles.forgotPassword}>
                                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
@@ -183,7 +317,6 @@ const styles = StyleSheet.create({
     scrollContent: {
         paddingBottom: SPACING.xl,
     },
-
     logoContainer: {
         alignItems: 'center',
         marginBottom: SPACING.l,
@@ -192,7 +325,7 @@ const styles = StyleSheet.create({
         width: 64,
         height: 64,
         borderRadius: 32,
-        backgroundColor: '#EFF6FF', // Light blue bg
+        backgroundColor: '#EFF6FF',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -250,34 +383,6 @@ const styles = StyleSheet.create({
     loginBtn: {
         borderRadius: LAYOUT.radius.m,
     },
-    divider: {
-        alignItems: 'center',
-        marginVertical: SPACING.l,
-    },
-    dividerText: {
-        color: COLORS.textSecondary,
-        fontSize: 14,
-    },
-    socialRow: {
-        flexDirection: 'row',
-        gap: SPACING.m,
-        marginBottom: SPACING.xl,
-    },
-    socialBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        paddingVertical: 12,
-        borderRadius: LAYOUT.radius.m,
-        gap: 8,
-    },
-    socialText: {
-        fontWeight: '600',
-        color: COLORS.textPrimary,
-    },
     signupLink: {
         alignItems: 'center',
     },
@@ -307,5 +412,18 @@ const styles = StyleSheet.create({
     footerDivider: {
         color: COLORS.textSecondary,
         fontSize: 12,
+    },
+    errorText: {
+        color: '#ef4444',
+        fontSize: 12,
+        marginTop: -8,
+        marginBottom: 8,
+        marginLeft: 4,
+    },
+    eyeIcon: {
+        position: 'absolute',
+        right: 12,
+        top: 42,
+        padding: 4,
     },
 });
