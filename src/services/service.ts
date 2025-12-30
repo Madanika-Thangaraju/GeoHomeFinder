@@ -1,4 +1,5 @@
 import { RegisterUserPayload } from "../../src/types/tenant.types";
+import { getToken, removeToken, saveToken } from "../utils/auth";
 
 const BASE_URL = "http://192.168.7.12:3000";
 
@@ -46,56 +47,36 @@ interface LoginResponse {
 }
 
 export const loginUser = async (data: LoginPayload): Promise<LoginResponse> => {
-  console.log('Logging in user...');
-  try {
-    const response = await fetch(`${BASE_URL}/users/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    });
+  const response = await fetch(`${BASE_URL}/users/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 
-    const result = await response.json();
-    console.log("LOGIN API RESULT:", result);
+  const result = await response.json();
 
-    if (!response.ok) {
-      // Handle specific error messages from backend
-      if (response.status === 401) {
-        throw new Error("Invalid credentials. Please check your email/phone and password.");
-      }
-      throw new Error(result.message || "Login failed");
-    }
-
-    // Store token in AsyncStorage or SecureStore if needed
-    if (result.token) {
-      // Example: await AsyncStorage.setItem('authToken', result.token);
-      console.log("Token received:", result.token);
-    }
-
-    return result;
-  } catch (error: any) {
-    console.log("LOGIN NETWORK ERROR:", error);
-    
-    // Handle network errors
-    if (error.message === "Network request failed") {
-      throw new Error("Unable to connect to server. Please check your internet connection.");
-    }
-    
-    throw error;
+  if (!response.ok) {
+    throw new Error(result.message || "Login failed");
   }
+
+  // ✅ SAVE TOKEN USING HELPER
+  await saveToken(result.token);
+
+  return result;
 };
+
 
 // ==================== OPTIONAL: LOGOUT ====================
 export const logoutUser = async () => {
   try {
-    // Clear stored token
-    // await AsyncStorage.removeItem('authToken');
-    console.log("User logged out");
+    // 🔥 Remove JWT token
+    await removeToken();
+
+    console.log("User logged out successfully");
     return { success: true };
   } catch (error) {
     console.log("LOGOUT ERROR:", error);
-    throw error;
+    throw new Error("Failed to logout user");
   }
 };
 
@@ -122,3 +103,30 @@ export const getCurrentUser = async (token: string) => {
     throw error;
   }
 };
+
+
+export const addProperty = async (data: any) => {
+  const token = await getToken();
+
+  if (!token) {
+    throw new Error("User not authenticated");
+  }
+
+  const response = await fetch(`${BASE_URL}/properties/add`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to add property");
+  }
+
+  return result;
+};
+
