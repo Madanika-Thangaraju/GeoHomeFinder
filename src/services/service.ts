@@ -130,3 +130,23 @@ export const addProperty = async (data: any) => {
   return result;
 };
 
+
+
+export const tenantProperties = async () => {
+  const token = await getToken();
+
+  const response = await fetch(`${BASE_URL}/tenants/all/properties`, {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to fetch properties");
+  }
+
+  return result.data; 
+};

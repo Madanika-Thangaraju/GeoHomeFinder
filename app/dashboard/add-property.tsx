@@ -1,20 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-    Alert,
-    Platform,
-    Image as RNImage,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Modal,
+  Platform,
+  Image as RNImage,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { COLORS, LAYOUT, SPACING } from "../../src/constants/theme";
 import { addProperty } from "../../src/services/service";
+
+// Replace with your Google Places API Key
+const GOOGLE_PLACES_API_KEY = "YOUR_GOOGLE_PLACES_API_KEY_HERE";
 
 const PROPERTY_TYPES = [
   { id: "house", label: "Independent House", sub: "Standalone property" },
@@ -25,6 +31,22 @@ const PROPERTY_TYPES = [
 
 const LISTING_TYPES = ["Sell", "Rent", "PG/Co-living"];
 
+const FURNISHING_TYPES = ["Unfurnished", "Semi-Furnished", "Fully Furnished"];
+
+interface PlacePrediction {
+  place_id: string;
+  description: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text: string;
+  };
+}
+
+interface LocationCoords {
+  lat: number;
+  lng: number;
+}
+
 export default function AddPropertyScreen() {
   const router = useRouter();
 
@@ -33,27 +55,44 @@ export default function AddPropertyScreen() {
   const [propertyTypes, setPropertyTypes] = useState<string[]>([]);
   const [address, setAddress] = useState("");
   const [bhk, setBhk] = useState("");
+  const [bedrooms, setBedrooms] = useState("");
+  const [bathrooms, setBathrooms] = useState("");
   const [sqft, setSqft] = useState("");
+  const [rentPrice, setRentPrice] = useState("");
+  const [deposit, setDeposit] = useState("");
+  const [furnishing, setFurnishing] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [price, setPrice] = useState("");
 
-  // Field error states for inline validation
+  const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+  const [showPredictions, setShowPredictions] = useState(false);
+  const [searchingAddress, setSearchingAddress] = useState(false);
+  const [locationCoords, setLocationCoords] = useState<LocationCoords | null>(null);
+  const [mapUrl, setMapUrl] = useState("");
+
+  const [showImageOptions, setShowImageOptions] = useState(false);
+
   const [errors, setErrors] = useState({
     propertyTitle: "",
     listingTypes: "",
     propertyTypes: "",
     address: "",
     bhk: "",
+    bedrooms: "",
+    bathrooms: "",
     sqft: "",
+    rentPrice: "",
+    price: "",
+    deposit: "",
+    furnishing: "",
     images: "",
   });
 
-  /* MULTI SELECT HANDLERS */
   const toggleListingType = (type: string) => {
     setListingTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
     );
-    // Clear error when user selects
     if (errors.listingTypes) {
       setErrors((prev) => ({ ...prev, listingTypes: "" }));
     }
@@ -63,21 +102,99 @@ export default function AddPropertyScreen() {
     setPropertyTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
     );
-    // Clear error when user selects
     if (errors.propertyTypes) {
       setErrors((prev) => ({ ...prev, propertyTypes: "" }));
     }
   };
 
-  /* HELPERS */
   const hasResidentialType = propertyTypes.some((t) =>
     ["house", "apartment", "villa"].includes(t)
   );
 
   const hasPlotType = propertyTypes.includes("plot");
+  const hasNonPlotType = propertyTypes.some((t) => t !== "plot");
+  const hasRentListing = listingTypes.includes("Rent") || listingTypes.includes("PG/Co-living");
+  const hasSellingListing = listingTypes.includes('Sell');
 
-  /* IMAGE PICKER */
-  const requestPermissions = async () => {
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (address.length > 2) {
+        searchPlaces(address);
+      } else {
+        setPredictions([]);
+        setShowPredictions(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [address]);
+
+  const searchPlaces = async (input: string) => {
+    try {
+      setSearchingAddress(true);
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+          input
+        )}&components=country:in&location=11.0168,76.9558&radius=50000&key=${GOOGLE_PLACES_API_KEY}`
+      );
+      const data = await response.json();
+
+      if (data.predictions) {
+        setPredictions(data.predictions);
+        setShowPredictions(true);
+      }
+    } catch (error) {
+      console.error("Error fetching places:", error);
+    } finally {
+      setSearchingAddress(false);
+    }
+  };
+
+  const selectPlace = async (prediction: PlacePrediction) => {
+    setAddress(prediction.description);
+    setShowPredictions(false);
+    setPredictions([]);
+
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=geometry&key=${GOOGLE_PLACES_API_KEY}`
+      );
+      const data = await response.json();
+
+      if (data.result?.geometry?.location) {
+        const coords = {
+          lat: data.result.geometry.location.lat,
+          lng: data.result.geometry.location.lng,
+        };
+        setLocationCoords(coords);
+        
+        const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${coords.lat},${coords.lng}&zoom=15&size=600x300&markers=color:red%7C${coords.lat},${coords.lng}&key=${GOOGLE_PLACES_API_KEY}`;
+        setMapUrl(staticMapUrl);
+      }
+    } catch (error) {
+      console.error("Error fetching place details:", error);
+    }
+
+    if (errors.address) {
+      setErrors((prev) => ({ ...prev, address: "" }));
+    }
+  };
+
+  const requestCameraPermissions = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Sorry, we need camera permissions to take photos."
+        );
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const requestGalleryPermissions = async () => {
     if (Platform.OS !== "web") {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
@@ -91,8 +208,41 @@ export default function AddPropertyScreen() {
     return true;
   };
 
-  const pickImages = async () => {
-    const hasPermission = await requestPermissions();
+  const takePhoto = async () => {
+    setShowImageOptions(false);
+    const hasPermission = await requestCameraPermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [4, 3],
+      });
+
+      if (!result.canceled && result.assets) {
+        const newImage = result.assets[0].uri;
+        const totalImages = images.length + 1;
+
+        if (totalImages > 10) {
+          Alert.alert("Limit Exceeded", "You can upload maximum 10 images");
+          return;
+        }
+
+        setImages((prev) => [...prev, newImage]);
+        if (errors.images) {
+          setErrors((prev) => ({ ...prev, images: "" }));
+        }
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to take photo");
+    }
+  };
+
+  const pickImagesFromGallery = async () => {
+    setShowImageOptions(false);
+    const hasPermission = await requestGalleryPermissions();
     if (!hasPermission) return;
 
     try {
@@ -126,7 +276,6 @@ export default function AddPropertyScreen() {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  /* VALIDATION */
   const validateForm = () => {
     const newErrors = {
       propertyTitle: "",
@@ -134,13 +283,18 @@ export default function AddPropertyScreen() {
       propertyTypes: "",
       address: "",
       bhk: "",
+      bedrooms: "",
+      bathrooms: "",
       sqft: "",
+      rentPrice: "",
+      price: "",
+      deposit: "",
+      furnishing: "",
       images: "",
     };
 
     let isValid = true;
 
-    // Property Title validation
     if (!propertyTitle.trim()) {
       newErrors.propertyTitle = "Property title is required";
       isValid = false;
@@ -152,19 +306,16 @@ export default function AddPropertyScreen() {
       isValid = false;
     }
 
-    // Listing Types validation
     if (listingTypes.length === 0) {
       newErrors.listingTypes = "Please select at least one listing type";
       isValid = false;
     }
 
-    // Property Types validation
     if (propertyTypes.length === 0) {
       newErrors.propertyTypes = "Please select at least one property type";
       isValid = false;
     }
 
-    // Address validation
     if (!address.trim()) {
       newErrors.address = "Property address is required";
       isValid = false;
@@ -173,7 +324,6 @@ export default function AddPropertyScreen() {
       isValid = false;
     }
 
-    // BHK validation (only for residential)
     if (hasResidentialType) {
       if (!bhk.trim()) {
         newErrors.bhk = "BHK is required for residential properties";
@@ -193,7 +343,41 @@ export default function AddPropertyScreen() {
       }
     }
 
-    // Sqft validation (for residential or plot)
+    if (hasNonPlotType) {
+      if (!bedrooms.trim()) {
+        newErrors.bedrooms = "Number of bedrooms is required";
+        isValid = false;
+      } else {
+        const bedroomsNum = Number(bedrooms);
+        if (isNaN(bedroomsNum) || bedroomsNum < 0) {
+          newErrors.bedrooms = "Bedrooms must be a positive number or 0";
+          isValid = false;
+        } else if (bedroomsNum > 20) {
+          newErrors.bedrooms = "Bedrooms seems unusually high (max 20)";
+          isValid = false;
+        } else if (!Number.isInteger(bedroomsNum)) {
+          newErrors.bedrooms = "Bedrooms must be a whole number";
+          isValid = false;
+        }
+      }
+    }
+
+    if (hasNonPlotType) {
+      if (!bathrooms.trim()) {
+        newErrors.bathrooms = "Number of bathrooms is required";
+        isValid = false;
+      } else {
+        const bathroomsNum = Number(bathrooms);
+        if (isNaN(bathroomsNum) || bathroomsNum <= 0) {
+          newErrors.bathrooms = "Bathrooms must be a positive number";
+          isValid = false;
+        } else if (bathroomsNum > 20) {
+          newErrors.bathrooms = "Bathrooms seems unusually high (max 20)";
+          isValid = false;
+        }
+      }
+    }
+
     if (hasResidentialType || hasPlotType) {
       if (!sqft.trim()) {
         newErrors.sqft = "Area is required";
@@ -213,7 +397,61 @@ export default function AddPropertyScreen() {
       }
     }
 
-    // Images validation
+    if (hasRentListing && hasNonPlotType) {
+      if (!rentPrice.trim()) {
+        newErrors.rentPrice = "Rent price is required for rental properties";
+        isValid = false;
+      } else {
+        const rentNum = Number(rentPrice);
+        if (isNaN(rentNum) || rentNum <= 0) {
+          newErrors.rentPrice = "Rent must be a positive number";
+          isValid = false;
+        } else if (rentNum < 1000) {
+          newErrors.rentPrice = "Rent seems too low (min ₹1000)";
+          isValid = false;
+        } else if (rentNum > 10000000) {
+          newErrors.rentPrice = "Rent seems too high (max ₹1,00,00,000)";
+          isValid = false;
+        }
+      }
+    }
+
+    if (hasSellingListing) {
+      if (!price.trim()) {
+        newErrors.price = "Price is required for selling properties";
+        isValid = false;
+      } else {
+        const priceNum = Number(price);
+        if (isNaN(priceNum) || priceNum <= 0) {
+          newErrors.price = "Price must be a positive number";
+          isValid = false;
+        }
+      }
+    }
+
+    if (hasRentListing && hasNonPlotType) {
+      if (!deposit.trim()) {
+        newErrors.deposit = "Deposit amount is required for rental properties";
+        isValid = false;
+      } else {
+        const depositNum = Number(deposit);
+        if (isNaN(depositNum) || depositNum < 0) {
+          newErrors.deposit = "Deposit must be a positive number or 0";
+          isValid = false;
+        } else if (depositNum > 100000000) {
+          newErrors.deposit = "Deposit seems too high (max ₹10,00,00,000)";
+          isValid = false;
+        }
+      }
+    }
+
+    if (hasNonPlotType) {
+      if (!furnishing) {
+        newErrors.furnishing = "Please select furnishing status";
+        isValid = false;
+      }
+    }
+
     if (images.length === 0) {
       newErrors.images = "Please add at least one property image";
       isValid = false;
@@ -226,9 +464,7 @@ export default function AddPropertyScreen() {
     return isValid;
   };
 
-  /* SUBMIT */
   const handleSubmit = async () => {
-    // Run validation
     if (!validateForm()) {
       Alert.alert(
         "Validation Error",
@@ -242,9 +478,16 @@ export default function AddPropertyScreen() {
       listingTypes,
       propertyTypes,
       address: address.trim(),
+      location: locationCoords,
       bhk: hasResidentialType ? Number(bhk) : null,
+      bedrooms: hasNonPlotType ? Number(bedrooms) : null,
+      bathrooms: hasNonPlotType ? Number(bathrooms) : null,
       sqft: (hasResidentialType || hasPlotType) ? Number(sqft) : null,
+      rentPrice: (hasRentListing && hasNonPlotType) ? Number(rentPrice) : null,
+      deposit: (hasRentListing && hasNonPlotType) ? Number(deposit) : null,
+      furnishing: hasNonPlotType ? furnishing : null,
       images: images,
+      price: hasSellingListing ? Number(price) : null,
     };
 
     try {
@@ -271,7 +514,7 @@ export default function AddPropertyScreen() {
         <View style={{ width: 20 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* BASIC INFO */}
         <Text style={styles.sectionTitle}>Basic Information</Text>
 
@@ -355,6 +598,11 @@ export default function AddPropertyScreen() {
           <Text style={styles.errorText}>{errors.propertyTypes}</Text>
         )}
 
+        {/* PROPERTY DETAILS SECTION */}
+        {(hasResidentialType || hasNonPlotType) && (
+          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Property Details</Text>
+        )}
+
         {/* CONDITIONAL INPUTS */}
         {hasResidentialType && (
           <>
@@ -375,6 +623,46 @@ export default function AddPropertyScreen() {
               maxLength={2}
             />
             {errors.bhk && <Text style={styles.errorText}>{errors.bhk}</Text>}
+          </>
+        )}
+
+        {hasNonPlotType && (
+          <>
+            <Text style={styles.label}>
+              BEDROOMS <Text style={styles.required}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.textInput, errors.bedrooms && styles.inputError]}
+              placeholder="Eg: 3"
+              keyboardType="numeric"
+              value={bedrooms}
+              onChangeText={(text) => {
+                setBedrooms(text);
+                if (errors.bedrooms) {
+                  setErrors((prev) => ({ ...prev, bedrooms: "" }));
+                }
+              }}
+              maxLength={2}
+            />
+            {errors.bedrooms && <Text style={styles.errorText}>{errors.bedrooms}</Text>}
+
+            <Text style={styles.label}>
+              BATHROOMS <Text style={styles.required}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.textInput, errors.bathrooms && styles.inputError]}
+              placeholder="Eg: 2"
+              keyboardType="numeric"
+              value={bathrooms}
+              onChangeText={(text) => {
+                setBathrooms(text);
+                if (errors.bathrooms) {
+                  setErrors((prev) => ({ ...prev, bathrooms: "" }));
+                }
+              }}
+              maxLength={2}
+            />
+            {errors.bathrooms && <Text style={styles.errorText}>{errors.bathrooms}</Text>}
           </>
         )}
 
@@ -400,30 +688,190 @@ export default function AddPropertyScreen() {
           </>
         )}
 
-        {/* ADDRESS */}
+        {hasNonPlotType && (
+          <>
+            <Text style={styles.label}>
+              FURNISHING STATUS <Text style={styles.required}>*</Text>
+            </Text>
+            <View style={styles.segmentContainer}>
+              {FURNISHING_TYPES.map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.segmentBtn,
+                    furnishing === type && styles.segmentBtnActive,
+                  ]}
+                  onPress={() => {
+                    setFurnishing(type);
+                    if (errors.furnishing) {
+                      setErrors((prev) => ({ ...prev, furnishing: "" }));
+                    }
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      furnishing === type && styles.segmentTextActive,
+                    ]}
+                  >
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {errors.furnishing && (
+              <Text style={styles.errorText}>{errors.furnishing}</Text>
+            )}
+          </>
+        )}
+
+        {/* PRICING SECTION */}
+        {hasSellingListing && (
+          <>
+            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Pricing Details</Text>
+            
+            <Text style={styles.label}>
+              PRICE (₹) <Text style={styles.required}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.textInput, errors.price && styles.inputError]}
+              placeholder="Eg: 5000000"
+              keyboardType="numeric"
+              value={price}
+              onChangeText={(text) => {
+                setPrice(text);
+                if (errors.price) {
+                  setErrors((prev) => ({ ...prev, price: "" }));
+                }
+              }}
+              maxLength={10}
+            />
+            {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
+          </>
+        )}
+
+        {hasRentListing && hasNonPlotType && (
+          <>
+            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Pricing Details</Text>
+            
+            <Text style={styles.label}>
+              MONTHLY RENT (₹) <Text style={styles.required}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.textInput, errors.rentPrice && styles.inputError]}
+              placeholder="Eg: 15000"
+              keyboardType="numeric"
+              value={rentPrice}
+              onChangeText={(text) => {
+                setRentPrice(text);
+                if (errors.rentPrice) {
+                  setErrors((prev) => ({ ...prev, rentPrice: "" }));
+                }
+              }}
+              maxLength={8}
+            />
+            {errors.rentPrice && <Text style={styles.errorText}>{errors.rentPrice}</Text>}
+
+            <Text style={styles.label}>
+              SECURITY DEPOSIT (₹) <Text style={styles.required}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.textInput, errors.deposit && styles.inputError]}
+              placeholder="Eg: 30000"
+              keyboardType="numeric"
+              value={deposit}
+              onChangeText={(text) => {
+                setDeposit(text);
+                if (errors.deposit) {
+                  setErrors((prev) => ({ ...prev, deposit: "" }));
+                }
+              }}
+              maxLength={9}
+            />
+            {errors.deposit && <Text style={styles.errorText}>{errors.deposit}</Text>}
+          </>
+        )}
+
+        {/* LOCATION SECTION */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Location</Text>
+
+        {/* ADDRESS WITH AUTOCOMPLETE */}
         <Text style={styles.label}>
           PROPERTY ADDRESS <Text style={styles.required}>*</Text>
         </Text>
-        <TextInput
-          style={[styles.textInput, errors.address && styles.inputError]}
-          placeholder="Search location in Coimbatore"
-          value={address}
-          onChangeText={(text) => {
-            setAddress(text);
-            if (errors.address) {
-              setErrors((prev) => ({ ...prev, address: "" }));
-            }
-          }}
-          multiline
-          numberOfLines={2}
-        />
+        <View style={{ position: 'relative', zIndex: 10 }}>
+          <View style={styles.addressInputContainer}>
+            <TextInput
+              style={[styles.textInput, errors.address && styles.inputError, { paddingRight: 40 }]}
+              placeholder="Search location in Coimbatore"
+              value={address}
+              onChangeText={(text) => {
+                setAddress(text);
+                if (errors.address) {
+                  setErrors((prev) => ({ ...prev, address: "" }));
+                }
+              }}
+            />
+            {searchingAddress && (
+              <ActivityIndicator 
+                size="small" 
+                color={COLORS.primary} 
+                style={styles.searchingIndicator}
+              />
+            )}
+          </View>
+          
+          {showPredictions && predictions.length > 0 && (
+            <View style={styles.predictionsContainer}>
+              <FlatList
+                data={predictions}
+                keyExtractor={(item) => item.place_id}
+                scrollEnabled={false}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.predictionItem}
+                    onPress={() => selectPlace(item)}
+                  >
+                    <Ionicons name="location-outline" size={20} color={COLORS.primary} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={styles.predictionMain}>
+                        {item.structured_formatting.main_text}
+                      </Text>
+                      <Text style={styles.predictionSecondary}>
+                        {item.structured_formatting.secondary_text}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          )}
+        </View>
         {errors.address && (
           <Text style={styles.errorText}>{errors.address}</Text>
         )}
 
-        {/* IMAGES */}
+        {/* MAP PREVIEW */}
+        {mapUrl ? (
+          <RNImage
+            source={{ uri: mapUrl }}
+            style={styles.map}
+            resizeMode="cover"
+          />
+        ) : (
+          <RNImage
+            source={{
+              uri: "https://images.unsplash.com/photo-1524661135-423995f22d0b",
+            }}
+            style={styles.map}
+          />
+        )}
+
+        {/* IMAGES SECTION */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Property Images</Text>
+        
         <Text style={styles.label}>
-          PROPERTY IMAGES <Text style={styles.required}>*</Text>
+          PHOTOS <Text style={styles.required}>*</Text>
         </Text>
         <Text style={styles.subLabel}>Add up to 10 images of your property</Text>
 
@@ -448,14 +896,14 @@ export default function AddPropertyScreen() {
         {images.length < 10 && (
           <TouchableOpacity
             style={[styles.addImageBtn, errors.images && styles.addImageBtnError]}
-            onPress={pickImages}
+            onPress={() => setShowImageOptions(true)}
           >
             <Ionicons name="camera-outline" size={32} color={COLORS.primary} />
             <Text style={styles.addImageText}>
               {images.length === 0 ? "Add Photos" : `Add More (${images.length}/10)`}
             </Text>
             <Text style={styles.addImageSubtext}>
-              Tap to select from gallery
+              Take photo or select from gallery
             </Text>
           </TouchableOpacity>
         )}
@@ -463,14 +911,6 @@ export default function AddPropertyScreen() {
         {errors.images && (
           <Text style={styles.errorText}>{errors.images}</Text>
         )}
-
-        {/* MAP PLACEHOLDER */}
-        <RNImage
-          source={{
-            uri: "https://images.unsplash.com/photo-1524661135-423995f22d0b",
-          }}
-          style={styles.map}
-        />
 
         <View style={{ height: 120 }} />
       </ScrollView>
@@ -491,6 +931,47 @@ export default function AddPropertyScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* IMAGE OPTIONS MODAL */}
+      <Modal
+        visible={showImageOptions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowImageOptions(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowImageOptions(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Property Photo</Text>
+            
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={takePhoto}
+            >
+              <Ionicons name="camera" size={24} color={COLORS.primary} />
+              <Text style={styles.modalOptionText}>Take Photo</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={pickImagesFromGallery}
+            >
+              <Ionicons name="images" size={24} color={COLORS.primary} />
+              <Text style={styles.modalOptionText}>Choose from Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => setShowImageOptions(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -579,6 +1060,43 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: 12,
   },
+  
+  // Address Autocomplete Styles
+  addressInputContainer: {
+    position: 'relative',
+  },
+  searchingIndicator: {
+    position: 'absolute',
+    right: 14,
+    top: 14,
+  },
+  predictionsContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    maxHeight: 250,
+    ...LAYOUT.shadow,
+  },
+  predictionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  predictionMain: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  predictionSecondary: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+
   imageGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -632,6 +1150,52 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginTop: 12,
   },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  modalOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  modalOptionText: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 16,
+    color: COLORS.textPrimary,
+  },
+  modalCancelBtn: {
+    padding: 16,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+
+  // Footer Styles
   footer: {
     position: "absolute",
     bottom: 0,
