@@ -22,7 +22,7 @@ export const OwnerDashboard = () => {
                         </View>
                     </View>
                     <View style={{ flexDirection: 'row', gap: SPACING.s }}>
-                        <TouchableOpacity style={styles.notificationBtn} onPress={() => router.push('/dashboard/profile')}>
+                        <TouchableOpacity style={styles.notificationBtn} onPress={() => router.push('/dashboard/profile-owner')}>
                             <Ionicons name="person-circle" size={28} color={COLORS.white} />
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.notificationBtn}>

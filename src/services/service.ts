@@ -1,7 +1,7 @@
 import { RegisterUserPayload } from "../../src/types/tenant.types";
 import { getToken, removeToken, saveToken } from "../utils/auth";
 
-const BASE_URL = "http://192.168.29.39:3000";
+const BASE_URL = "http://192.168.7.12:3000";
 
 // ==================== REGISTER USER ====================
 export const registerUser = async (data: RegisterUserPayload) => {
@@ -149,4 +149,49 @@ export const tenantProperties = async () => {
   }
 
   return result.data; 
+};
+
+
+// ---------- Helper ----------
+const authHeaders = async () => {
+  const token = await getToken();
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+};
+
+// ---------- Profile ----------
+export const getProfile = async () => {
+  const res = await fetch(`${BASE_URL}/owners/profile`, {
+    headers: await authHeaders(),
+  });
+
+  if (!res.ok) throw new Error("Failed to fetch profile");
+  return res.json();
+};
+
+export const updateProfile = async (payload: {
+  name: string;
+  phone: string;
+  location: string;
+}) => {
+  const res = await fetch(`${BASE_URL}/api/profile`, {
+    method: "PUT",
+    headers: await authHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) throw new Error("Failed to update profile");
+  return res.json();
+};
+
+export const togglePushNotification = async () => {
+  const res = await fetch(`${BASE_URL}/api/profile/notifications`, {
+    method: "PATCH",
+    headers: await authHeaders(),
+  });
+
+  if (!res.ok) throw new Error("Failed to update notifications");
+  return res.json();
 };
