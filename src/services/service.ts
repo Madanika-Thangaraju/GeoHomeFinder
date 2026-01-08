@@ -1,7 +1,7 @@
 import { RegisterUserPayload } from "../../src/types/tenant.types";
 import { getToken, removeToken, saveToken } from "../utils/auth";
 
-const BASE_URL = "http://192.168.7.12:3000";
+const BASE_URL = "http://192.168.29.39:3000";
 
 // ==================== REGISTER USER ====================
 export const registerUser = async (data: RegisterUserPayload) => {

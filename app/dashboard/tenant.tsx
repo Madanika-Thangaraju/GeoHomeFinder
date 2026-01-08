@@ -2,16 +2,19 @@ import { tenantProperties } from '@/src/services/service';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Dimensions,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 
 const { width } = Dimensions.get('window');
@@ -27,12 +30,47 @@ export default function TenantDashboard() {
   const [radius, setRadius] = useState(1.5);
   const [searchMode, setSearchMode] = useState<'pin' | 'radius' | 'draw'>('pin');
 
-  // ✅ Fetch properties from API
+  // ✅ Favorites and search state
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('Gandhipuram, Coimbatore');
+
+  // ✅ Load favorites from AsyncStorage
+  useEffect(() => {
+    const loadFavorites = async () => {
+      try {
+        const saved = await AsyncStorage.getItem('favorites');
+        if (saved) {
+          setFavorites(JSON.parse(saved));
+        }
+      } catch (error) {
+        console.error('Failed to load favorites', error);
+      }
+    };
+    loadFavorites();
+  }, []);
+
+  // ✅ Fetch properties from API and ensure high-quality images
   useEffect(() => {
     const fetchProperties = async () => {
+      const HOUSE_IMAGES = [
+        'https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&q=80&w=800',
+      ];
+
       try {
         const data = await tenantProperties();
-        setProperties(data);
+        // Limit to 6 properties and inject high-quality house images
+        const enrichedData = data.slice(0, 6).map((prop: any, index: number) => ({
+          ...prop,
+          image: { uri: HOUSE_IMAGES[index % HOUSE_IMAGES.length] },
+          status: 'Available', // Ensuring all are available as requested
+          isSoldOut: false,
+        }));
+        setProperties(enrichedData);
       } catch (error) {
         console.error('Failed to load properties', error);
       } finally {
@@ -42,6 +80,28 @@ export default function TenantDashboard() {
 
     fetchProperties();
   }, []);
+
+  // ✅ Toggle favorite functionality
+  const toggleFavorite = async (propertyId: string) => {
+    try {
+      let updatedFavorites: string[];
+      if (favorites.includes(propertyId)) {
+        // Remove from favorites
+        updatedFavorites = favorites.filter(id => id !== propertyId);
+      } else {
+        // Add to favorites
+        updatedFavorites = [...favorites, propertyId];
+      }
+      setFavorites(updatedFavorites);
+      await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
+
+      // Also save the property details for the favorites page
+      const favoritedProperties = properties.filter(p => updatedFavorites.includes(p.id));
+      await AsyncStorage.setItem('favoritedProperties', JSON.stringify(favoritedProperties));
+    } catch (error) {
+      console.error('Failed to update favorites', error);
+    }
+  };
 
   const handleSliderPress = (event: any) => {
     const { locationX } = event.nativeEvent;
@@ -86,13 +146,19 @@ export default function TenantDashboard() {
       {/* Search Header */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 8 }}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 6 }}>
+            <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Ionicons name="search" size={20} color={COLORS.textSecondary} />
-          <Text style={styles.searchPlaceholder}>Gandhipuram, Coimbatore</Text>
+          <Ionicons name="search" size={18} color={COLORS.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search location..."
+            placeholderTextColor={COLORS.textSecondary}
+          />
           <TouchableOpacity onPress={() => router.push('/dashboard/rental-preferences')}>
-            <Ionicons name="filter" size={24} color={COLORS.textPrimary} />
+            <Ionicons name="filter" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
 
@@ -137,13 +203,58 @@ export default function TenantDashboard() {
       <View style={styles.bottomSheet}>
         <View style={styles.sheetHandle} />
 
+        {/* Compact Controls Section */}
+        <View style={styles.compactControls}>
+          {/* Push Alerts Toggle */}
+          <View style={styles.compactToggle}>
+            <View style={styles.toggleLeft}>
+              <Ionicons name="notifications" size={16} color={COLORS.primary} />
+              <Text style={styles.compactLabel}>Push Alerts</Text>
+            </View>
+            <Switch
+              value={alertsEnabled}
+              onValueChange={setAlertsEnabled}
+              trackColor={{ false: '#D1D5DB', true: COLORS.primary }}
+              thumbColor={alertsEnabled ? COLORS.white : '#F3F4F6'}
+              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+            />
+          </View>
+
+          {/* Alert Radius Slider */}
+          <View style={styles.radiusSliderSection}>
+            <View style={styles.sliderHeader}>
+              <Ionicons name="radio-button-on" size={16} color={COLORS.primary} />
+              <Text style={styles.compactLabel}>Alert Radius</Text>
+              <Text style={styles.radiusValue}>{radius} km</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.sliderTrack}
+              onPress={handleSliderPress}
+              activeOpacity={1}
+            >
+              <View style={styles.sliderFill} />
+              <View style={[styles.sliderKnob, { left: getKnobPosition() }]} />
+            </TouchableOpacity>
+            <View style={styles.sliderLabels}>
+              <Text style={styles.sliderLabelText}>1.5 km</Text>
+              <Text style={styles.sliderLabelText}>3.0 km</Text>
+              <Text style={styles.sliderLabelText}>5.0 km</Text>
+            </View>
+          </View>
+        </View>
+
         <View style={styles.listHeader}>
           <Text style={styles.listCount}>
             {properties.length} homes near you
           </Text>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          bounces={true}
+          decelerationRate="fast"
+          scrollEventThrottle={16}
+        >
           {properties.map((prop) => (
             <TouchableOpacity
               key={prop.id}
@@ -155,10 +266,27 @@ export default function TenantDashboard() {
               }
             >
               <View style={styles.propertyCard}>
-                <Image
-                  source={{ uri: prop.image.uri }}
-                  style={styles.cardImage}
-                />
+                <View style={styles.imageWrapper}>
+                  <Image
+                    source={{ uri: prop.image.uri }}
+                    style={styles.cardImage}
+                  />
+
+                  {/* Like Button */}
+                  <TouchableOpacity
+                    style={styles.likeButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(prop.id);
+                    }}
+                  >
+                    <Ionicons
+                      name={favorites.includes(prop.id) ? 'heart' : 'heart-outline'}
+                      size={20}
+                      color={favorites.includes(prop.id) ? '#EF4444' : COLORS.textPrimary}
+                    />
+                  </TouchableOpacity>
+                </View>
 
                 <View style={styles.cardContent}>
                   <Text style={styles.cardPrice}>
@@ -180,8 +308,32 @@ export default function TenantDashboard() {
               </View>
             </TouchableOpacity>
           ))}
-          <View style={{ height: 100 }} />
+          <View style={{ height: 120 }} />
         </ScrollView>
+      </View>
+
+      {/* Bottom Navigation Bar */}
+      <View style={styles.bottomNav}>
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/dashboard/saved-properties')}
+        >
+          <Ionicons name="heart" size={24} color={COLORS.primary} />
+          <Text style={styles.navLabel}>Favorites</Text>
+          {favorites.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{favorites.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/dashboard/profile-tenant')}
+        >
+          <Ionicons name="person" size={24} color={COLORS.textSecondary} />
+          <Text style={styles.navLabel}>Profile</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -200,17 +352,92 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
-    padding: 12,
-    borderRadius: 16,
+    padding: 10,
+    borderRadius: 14,
     alignItems: 'center',
     ...LAYOUT.shadow,
   },
-  searchPlaceholder: { flex: 1, marginLeft: 8, fontWeight: '600' },
-  filterRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 8 },
-  filterPill: { padding: 8, backgroundColor: COLORS.white, borderRadius: 20 },
+  searchInput: { flex: 1, marginLeft: 6, fontWeight: '600', fontSize: 13, color: COLORS.textPrimary },
+  filterRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 6 },
+  filterPill: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: COLORS.white, borderRadius: 18 },
   activePill: { backgroundColor: COLORS.primary },
-  pillText: { fontSize: 12 },
+  pillText: { fontSize: 11, fontWeight: '500' },
   activePillText: { color: COLORS.white },
+
+  // Compact Controls in Bottom Sheet
+  compactControls: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: COLORS.white,
+    marginHorizontal: 16,
+    marginTop: 6,
+    borderRadius: 10,
+    ...LAYOUT.shadow,
+  },
+  compactToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  toggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  compactLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  radiusSliderSection: {
+    marginTop: 2,
+  },
+  sliderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  radiusValue: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginLeft: 'auto',
+  },
+  sliderTrack: {
+    height: 5,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2.5,
+    position: 'relative',
+    marginVertical: 6,
+  },
+  sliderFill: {
+    height: 5,
+    backgroundColor: COLORS.primary,
+    borderRadius: 2.5,
+    width: '50%',
+  },
+  sliderKnob: {
+    position: 'absolute',
+    top: -4,
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    backgroundColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+    ...LAYOUT.shadow,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 2,
+  },
+  sliderLabelText: {
+    fontSize: 9,
+    color: COLORS.textSecondary,
+  },
 
   mapLayer: { height: '50%' },
   radiusCircle: {
@@ -258,7 +485,24 @@ const styles = StyleSheet.create({
     margin: 16,
     overflow: 'hidden',
   },
+  imageWrapper: {
+    position: 'relative',
+    width: 120,
+    height: 120,
+  },
   cardImage: { width: 120, height: 120 },
+  likeButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...LAYOUT.shadow,
+  },
   cardContent: { flex: 1, padding: 12 },
   cardPrice: { fontSize: 16, fontWeight: 'bold' },
   cardPeriod: { fontSize: 10 },
@@ -267,4 +511,49 @@ const styles = StyleSheet.create({
   cardFooter: { flexDirection: 'row', gap: 8, marginTop: 6 },
   matchScore: { fontSize: 10, color: COLORS.primary },
   petBadge: { fontSize: 10, color: COLORS.textSecondary },
+
+  // Bottom Navigation
+  bottomNav: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    paddingBottom: 20,
+    justifyContent: 'space-around',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    ...LAYOUT.shadow,
+  },
+  navButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  navLabel: {
+    fontSize: 11,
+    marginTop: 4,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -12,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
 });

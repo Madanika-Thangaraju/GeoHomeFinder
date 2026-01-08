@@ -50,7 +50,7 @@ export default function LoginScreen() {
         if (!value.trim()) {
             return loginMethod === 'email' ? 'Email is required' : 'Phone number is required';
         }
-        
+
         if (loginMethod === 'email') {
             return validateEmail(value);
         } else {
@@ -204,7 +204,7 @@ export default function LoginScreen() {
                                 keyboardType={loginMethod === 'email' ? "email-address" : "phone-pad"}
                                 style={styles.inputSpacer}
                                 variant="standard"
-                                autoCapitalize={loginMethod === 'email' ? 'none' : 'none'}
+                                autoCapitalize="none"
                                 maxLength={loginMethod === 'phone' ? 10 : undefined}
                             />
                             {errors.identifier ? (

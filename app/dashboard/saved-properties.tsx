@@ -1,45 +1,50 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 
-const SAVED_PROPERTIES = [
-    {
-        id: '1',
-        title: '3BHK Apartment',
-        location: 'RS Puram, Coimbatore',
-        image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80',
-        price: '₹25,000/mo',
-        specs: '3bd  |  2ba  |  1400 sqft',
-        tag: 'Verified',
-        tagColor: '#52525B'
-    },
-    {
-        id: '2',
-        title: '2BHK Spacious',
-        location: 'Peelamedu, Coimbatore',
-        image: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80',
-        price: '₹18,000/mo',
-        specs: '2bd  |  2ba  |  1100 sqft',
-        tag: 'PRICE DROP',
-        tagColor: '#22C55E'
-    },
-    {
-        id: '3',
-        title: 'Modern Villa',
-        location: 'Saravanampatti, Coimbatore',
-        image: 'https://images.unsplash.com/photo-1600596542815-e32cbb04a08f?auto=format&fit=crop&w=800&q=80',
-        price: '₹45,000/mo',
-        specs: '4bd  |  4ba  |  2800 sqft',
-        tag: 'Sold Out',
-        tagColor: '#64748B',
-        isSoldOut: true
-    }
-];
-
 export default function SavedPropertiesScreen() {
-    // router is now imported directly from expo-router
+    const [savedProperties, setSavedProperties] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // Load favorites from AsyncStorage
+    useEffect(() => {
+        const loadFavorites = async () => {
+            try {
+                const favoritedPropertiesJson = await AsyncStorage.getItem('favoritedProperties');
+                if (favoritedPropertiesJson) {
+                    const properties = JSON.parse(favoritedPropertiesJson);
+                    setSavedProperties(properties);
+                }
+            } catch (error) {
+                console.error('Failed to load favorites', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadFavorites();
+    }, []);
+
+    // Remove from favorites
+    const removeFavorite = async (propertyId: string) => {
+        try {
+            const updatedProperties = savedProperties.filter(p => p.id !== propertyId);
+            setSavedProperties(updatedProperties);
+            await AsyncStorage.setItem('favoritedProperties', JSON.stringify(updatedProperties));
+
+            // Also update favorites list
+            const favoritesJson = await AsyncStorage.getItem('favorites');
+            if (favoritesJson) {
+                const favorites = JSON.parse(favoritesJson);
+                const updatedFavorites = favorites.filter((id: string) => id !== propertyId);
+                await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
+            }
+        } catch (error) {
+            console.error('Failed to remove favorite', error);
+        }
+    };
 
     return (
         <View style={styles.container}>
@@ -54,50 +59,65 @@ export default function SavedPropertiesScreen() {
 
 
             <View style={styles.subheader}>
-                <Text style={styles.countText}>{SAVED_PROPERTIES.length} Properties Saved</Text>
+                <Text style={styles.countText}>{savedProperties.length} Properties Saved</Text>
                 <Text style={styles.compareText}>Compare (0)</Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.listContent}>
-                {SAVED_PROPERTIES.map((item) => (
-                    <View key={item.id} style={styles.card}>
-                        <View style={styles.imageContainer}>
-                            <Image source={{ uri: item.image }} style={styles.cardImage} />
-                            <TouchableOpacity style={styles.heartBtn}>
-                                <Ionicons name="heart" size={20} color="#EF4444" />
-                            </TouchableOpacity>
-                            {item.tag && (
-                                <View style={[styles.tagBadge, { backgroundColor: item.tagColor }]}>
-                                    {item.tag === 'Verified' && <Ionicons name="checkmark-circle" size={12} color={COLORS.white} style={{ marginRight: 4 }} />}
-                                    <Text style={styles.tagText}>{item.tag}</Text>
-                                </View>
-                            )}
-                            {item.isSoldOut && (
-                                <View style={styles.soldOutOverlay}>
-                                    <Text style={styles.soldOutOverlayText}>Sold Out</Text>
-                                </View>
-                            )}
-                        </View>
-                        <View style={styles.cardContent}>
-                            <Text style={styles.price}>{item.price}</Text>
-                            <Text style={styles.title}>{item.title}</Text>
-                            <Text style={styles.location}>{item.location}</Text>
-                            <Text style={styles.specs}>{item.specs}</Text>
+            {loading ? (
+                <View style={styles.emptyState}>
+                    <Text style={styles.emptyText}>Loading favorites...</Text>
+                </View>
+            ) : savedProperties.length === 0 ? (
+                <View style={styles.emptyState}>
+                    <Ionicons name="heart-outline" size={64} color={COLORS.textSecondary} />
+                    <Text style={styles.emptyTitle}>No Favorites Yet</Text>
+                    <Text style={styles.emptyText}>Start liking properties to save them here</Text>
+                </View>
+            ) : (
+                <ScrollView contentContainerStyle={styles.listContent}>
+                    {savedProperties.map((item: any) => (
+                        <View key={item.id} style={styles.card}>
+                            <View style={styles.imageContainer}>
+                                <Image source={{ uri: item.image.uri || item.image }} style={styles.cardImage} />
+                                <TouchableOpacity
+                                    style={styles.heartBtn}
+                                    onPress={() => removeFavorite(item.id)}
+                                >
+                                    <Ionicons name="heart" size={20} color="#EF4444" />
+                                </TouchableOpacity>
+                                {item.tag && (
+                                    <View style={[styles.tagBadge, { backgroundColor: item.tagColor }]}>
+                                        {item.tag === 'Verified' && <Ionicons name="checkmark-circle" size={12} color={COLORS.white} style={{ marginRight: 4 }} />}
+                                        <Text style={styles.tagText}>{item.tag}</Text>
+                                    </View>
+                                )}
+                                {item.isSoldOut && (
+                                    <View style={styles.soldOutOverlay}>
+                                        <Text style={styles.soldOutOverlayText}>Sold Out</Text>
+                                    </View>
+                                )}
+                            </View>
+                            <View style={styles.cardContent}>
+                                <Text style={styles.price}>{item.price}</Text>
+                                <Text style={styles.title}>{item.title}</Text>
+                                <Text style={styles.location}>{item.location}</Text>
+                                <Text style={styles.specs}>{item.specs}</Text>
 
-                            <View style={styles.cardActions}>
-                                <TouchableOpacity style={styles.detailsBtn}>
-                                    <Text style={styles.btnText}>Details</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: item.isSoldOut ? '#E2E8F0' : COLORS.white, borderColor: item.isSoldOut ? '#E2E8F0' : COLORS.textPrimary, borderWidth: 1 }]} disabled={item.isSoldOut}>
-                                    <Text style={[styles.btnText, { color: item.isSoldOut ? COLORS.textSecondary : COLORS.textPrimary }]}>
-                                        {item.isSoldOut ? 'Sold Out' : 'Contact Owner'}
-                                    </Text>
-                                </TouchableOpacity>
+                                <View style={styles.cardActions}>
+                                    <TouchableOpacity style={styles.detailsBtn}>
+                                        <Text style={styles.btnText}>Details</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: item.isSoldOut ? '#E2E8F0' : COLORS.white, borderColor: item.isSoldOut ? '#E2E8F0' : COLORS.textPrimary, borderWidth: 1 }]} disabled={item.isSoldOut}>
+                                        <Text style={[styles.btnText, { color: item.isSoldOut ? COLORS.textSecondary : COLORS.textPrimary }]}>
+                                            {item.isSoldOut ? 'Sold Out' : 'Contact Owner'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </View>
-                    </View>
-                ))}
-            </ScrollView>
+                    ))}
+                </ScrollView>
+            )}
         </View>
     );
 }
@@ -265,5 +285,24 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         color: COLORS.textPrimary,
+    },
+    emptyState: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: SPACING.xl,
+        paddingTop: 60,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+        marginTop: SPACING.m,
+        marginBottom: SPACING.s,
+    },
+    emptyText: {
+        fontSize: 14,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
     },
 });

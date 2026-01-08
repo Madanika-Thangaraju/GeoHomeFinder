@@ -9,6 +9,8 @@ interface CustomInputProps {
     placeholder?: string;
     secureTextEntry?: boolean;
     keyboardType?: KeyboardTypeOptions;
+    autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+    maxLength?: number;
     style?: ViewStyle;
     textColor?: string;
     variant?: 'glass' | 'standard';
@@ -21,6 +23,8 @@ export const CustomInput: React.FC<CustomInputProps> = ({
     placeholder,
     secureTextEntry,
     keyboardType,
+    autoCapitalize = 'sentences',
+    maxLength,
     style,
     textColor = COLORS.textPrimary,
     variant = 'glass',
@@ -44,6 +48,8 @@ export const CustomInput: React.FC<CustomInputProps> = ({
                     placeholderTextColor={COLORS.textSecondary}
                     secureTextEntry={secureTextEntry}
                     keyboardType={keyboardType}
+                    autoCapitalize={autoCapitalize}
+                    maxLength={maxLength}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
                 />
