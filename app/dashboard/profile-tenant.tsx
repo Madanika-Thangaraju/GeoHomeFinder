@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
+import { getProfile, updateProfile } from '../../src/services/service';
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -14,19 +15,54 @@ export default function ProfileScreen() {
     const [showTermsPolicies, setShowTermsPolicies] = useState(false);
 
     const [userData, setUserData] = useState({
-        name: 'Anita Raj',
-        email: 'anita.raj@example.com',
-        phone: '+91 98765 43210',
-        location: 'Coimbatore, Tamil Nadu',
-        memberSince: 'December 2025',
+        name: '',
+        email: '',
+        phone: '',
+        location: '',
+        memberSince: '',
         role: 'Tenant'
     });
 
     const [editData, setEditData] = useState({ ...userData });
 
-    const handleSaveProfile = () => {
-        setUserData({ ...editData });
-        setShowEditProfile(false);
+    // Load Profile
+    useEffect(() => {
+        loadProfile();
+    }, []);
+
+    const loadProfile = async () => {
+        try {
+            const data = await getProfile();
+            const mappedData = {
+                name: data.name || '',
+                email: data.email || '',
+                phone: data.phone || '',
+                location: data.location || 'Coimbatore, Tamil Nadu', // Default if empty
+                memberSince: data.created_at ? new Date(data.created_at).toDateString() : '',
+                role: 'Tenant' // Or data.role if available
+            };
+            setUserData(mappedData);
+            setEditData(mappedData);
+        } catch (error) {
+            console.error('Failed to load profile', error);
+            // Fallback or Alert?
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        try {
+            await updateProfile({
+                name: editData.name,
+                phone: editData.phone,
+                location: editData.location
+            });
+            setUserData({ ...editData });
+            setShowEditProfile(false);
+            Alert.alert("Success", "Profile updated successfully");
+        } catch (error) {
+            console.error('Failed to update profile', error);
+            Alert.alert("Error", "Failed to update profile");
+        }
     };
 
     const handleLogout = () => {

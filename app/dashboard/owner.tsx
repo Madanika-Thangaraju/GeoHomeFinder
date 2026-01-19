@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
     Image as RNImage,
     ScrollView,
@@ -11,11 +11,71 @@ import {
     View
 } from 'react-native';
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
-import { GlassCard } from '../../src/components/shared/GlassCard';
-import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
+// ... imports
+import { GlassCard } from '@/src/components/shared/GlassCard';
+import { COLORS, LAYOUT, SPACING } from '@/src/constants/theme';
+import { getOwnerProperties, getProfile } from '../../src/services/service';
+import { decodeToken, getToken, getUser } from '../../src/utils/auth';
 
+// ... inside component
 export default function OwnerDashboard() {
     const router = useRouter();
+    const [listingsCount, setListingsCount] = useState<number | string>('-');
+
+    useFocusEffect(
+        useCallback(() => {
+            const fetchData = async () => {
+                try {
+                    let userId;
+
+                    // 1. Try Local Storage
+                    const user = await getUser();
+                    if (user && user.id) {
+                        userId = user.id;
+                    }
+
+                    // 2. Decode Token (Robust & Fast)
+                    if (!userId) {
+                        const token = await getToken();
+                        if (token) {
+                            const decoded = decodeToken(token);
+                            if (decoded && (decoded.id || decoded.sub)) {
+                                userId = decoded.id || decoded.sub;
+                            }
+                        }
+                    }
+
+                    // 3. Fallback to Profile API
+                    if (!userId) {
+                        try {
+                            const profile = await getProfile();
+                            if (profile?.id) userId = profile.id;
+                            else if (profile?.user?.id) userId = profile.user.id;
+                            else if (profile?.data?.id) userId = profile.data.id;
+                        } catch (e) {
+                            console.log("Failed to get profile", e);
+                        }
+                    }
+
+                    if (userId) {
+                        const listings = await getOwnerProperties(userId);
+                        if (Array.isArray(listings)) {
+                            setListingsCount(listings.length);
+                        } else {
+                            setListingsCount(0);
+                        }
+                    } else {
+                        console.error("CRITICAL: User ID not found via local storage, /users/me, or /owners/profile");
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch dashboard data", error);
+                }
+            };
+
+            fetchData();
+        }, [])
+    );
+
 
     return (
         <View style={styles.container}>
@@ -63,9 +123,6 @@ export default function OwnerDashboard() {
                     </View>
                 </View>
 
-                {/* Profile & Notifications */}
-                {/* Profile & Notifications moved to header */}
-
                 {/* Greeting */}
                 <Animated.View entering={FadeInDown.delay(100)}>
                     <Text style={styles.greeting}>Welcome back, Owner</Text>
@@ -74,7 +131,7 @@ export default function OwnerDashboard() {
                     </Text>
                 </Animated.View>
 
-                {/* Hero Section (NO IMAGE) */}
+                {/* Hero Section */}
                 <Animated.View entering={FadeInDown.delay(200)} style={styles.heroSection}>
                     <View style={styles.heroCard}>
                         <RNImage
@@ -83,7 +140,7 @@ export default function OwnerDashboard() {
                             resizeMode="cover"
                         />
                         <LinearGradient
-                            colors={['rgba(15,23,42,0.1)', 'rgba(15,23,42,0.6)']} // Adjusted opacity for better visibility of image
+                            colors={['rgba(15,23,42,0.1)', 'rgba(15,23,42,0.6)']}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 0, y: 1 }}
                             style={styles.heroBackground}
@@ -167,7 +224,7 @@ export default function OwnerDashboard() {
                             <View style={styles.statsIconBg}>
                                 <Ionicons name="home" size={24} color="#C084FC" />
                             </View>
-                            <Text style={styles.statsValue}>2</Text>
+                            <Text style={styles.statsValue}>{listingsCount}</Text>
                             <Text style={styles.statsLabel}>Active Listings</Text>
                         </GlassCard>
                     </TouchableOpacity>

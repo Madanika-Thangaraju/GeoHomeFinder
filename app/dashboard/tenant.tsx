@@ -1,4 +1,4 @@
-import { tenantProperties } from '@/src/services/service';
+import { getProfile, tenantProperties } from '@/src/services/service';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -25,6 +25,7 @@ export default function TenantDashboard() {
   // ✅ API-driven state
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<any>(null);
 
   const [alertsEnabled, setAlertsEnabled] = useState(true);
   const [radius, setRadius] = useState(1.5);
@@ -78,7 +79,17 @@ export default function TenantDashboard() {
       }
     };
 
+    const fetchUserProfile = async () => {
+      try {
+        const profile = await getProfile();
+        setUserProfile(profile);
+      } catch (error) {
+        console.error('Failed to load profile', error);
+      }
+    };
+
     fetchProperties();
+    fetchUserProfile();
   }, []);
 
   // ✅ Toggle favorite functionality
@@ -143,6 +154,29 @@ export default function TenantDashboard() {
 
   return (
     <View style={styles.container}>
+      {/* Profile Header */}
+      <View style={styles.header}>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.greetingText}>Welcome back,</Text>
+          <Text style={styles.usernameText}>{userProfile?.name || 'Tenant'}</Text>
+          <View style={styles.locationRow}>
+            <Ionicons name="location-sharp" size={14} color={COLORS.primary} />
+            <Text style={styles.locationText}>{userProfile?.location || 'Coimbatore, IN'}</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.profileImageContainer}
+          onPress={() => router.push('/dashboard/profile-tenant')}
+        >
+          <Image
+            source={{
+              uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
+            }}
+            style={styles.profileImage}
+          />
+        </TouchableOpacity>
+      </View>
+
       {/* Search Header */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
@@ -348,7 +382,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   container: { flex: 1, backgroundColor: '#F1F5F9' },
-  searchContainer: { position: 'absolute', top: 60, left: 16, right: 16, zIndex: 10 },
+  // Header Styles
+  header: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  greetingText: {
+    fontSize: 14,
+    color: '#64748B', // slate-500
+    fontWeight: '600',
+  },
+  usernameText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  locationText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginLeft: 4,
+  },
+  profileImageContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: COLORS.white,
+    backgroundColor: COLORS.white,
+    ...LAYOUT.shadow,
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  searchContainer: { position: 'absolute', top: 130, left: 16, right: 16, zIndex: 10 },
   searchBar: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,

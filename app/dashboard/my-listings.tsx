@@ -1,43 +1,85 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React from 'react';
-import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
-
-const MOCK_LISTINGS = [
-    {
-        id: '1',
-        title: 'Sunnyvale Villa',
-        address: '123 Marina Blvd, San Francisco, CA',
-        price: '$4,500 / mo',
-        image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
-        views: 245,
-        status: 'Active',
-    },
-    {
-        id: '2',
-        title: 'Modern Downtown Loft',
-        address: '456 Market St, San Francisco, CA',
-        price: '$3,200 / mo',
-        image: 'https://images.unsplash.com/photo-1600596542815-e32eb665bc72?auto=format&fit=crop&w=800&q=80',
-        views: 112,
-        status: 'Pending',
-    },
-    {
-        id: '3',
-        title: 'Cozy Suburban Home',
-        address: '789 Oak Ave, Palo Alto, CA',
-        price: '$5,100 / mo',
-        image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80',
-        views: 89,
-        status: 'Active',
-    },
-];
+import { getOwnerProperties, getProfile } from '../../src/services/service';
+import { decodeToken, getToken, getUser } from '../../src/utils/auth';
 
 export default function MyListings() {
     const router = useRouter();
+    const [listings, setListings] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const renderItem = ({ item }: { item: typeof MOCK_LISTINGS[0] }) => (
+    useFocusEffect(
+        useCallback(() => {
+            loadListings();
+        }, [])
+    );
+
+    const loadListings = async () => {
+        try {
+            setLoading(true);
+            let userId;
+
+            // 1. Try Local Storage
+            const user = await getUser();
+            if (user && user.id) {
+                userId = user.id;
+            }
+
+            // 2. Decode Token (Robust & Fast)
+            if (!userId) {
+                const token = await getToken();
+                if (token) {
+                    const decoded = decodeToken(token);
+                    if (decoded && (decoded.id || decoded.sub)) {
+                        userId = decoded.id || decoded.sub;
+                    }
+                }
+            }
+
+            // 3. Fallback to Profile API
+            if (!userId) {
+                try {
+                    const profile = await getProfile();
+                    console.log("DEBUG: getProfile response:", JSON.stringify(profile));
+                    if (profile?.id) userId = profile.id;
+                    else if (profile?.user?.id) userId = profile.user.id;
+                    else if (profile?.data?.id) userId = profile.data.id;
+                } catch (e) {
+                    console.log("Failed to get profile", e);
+                }
+            }
+
+            if (userId) {
+                const data = await getOwnerProperties(userId);
+                if (Array.isArray(data)) {
+                    const formatted = data.map((item: any) => ({
+                        id: item.id?.toString() || Math.random().toString(),
+                        title: item.title || item.name || 'Untitled Property',
+                        address: item.address || item.location || 'No address provided',
+                        price: item.price ? `$${item.price}` : 'Price on request',
+                        image:
+                            // item.image?.uri || item.images?.[0] ||
+                            'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
+                        views: item.views || 0,
+
+                        status: item.status || 'Active'
+                    }));
+                    setListings(formatted);
+                }
+            } else {
+                console.error("Could not find User ID from local storage or profile API");
+            }
+        } catch (error) {
+            console.error("Failed to load listings", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const renderItem = ({ item }: { item: any }) => (
         <View style={styles.card}>
             <View style={{ position: 'relative' }}>
                 <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
@@ -70,6 +112,14 @@ export default function MyListings() {
         </View>
     );
 
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
@@ -83,11 +133,16 @@ export default function MyListings() {
             </View>
 
             <FlatList
-                data={MOCK_LISTINGS}
+                data={listings}
                 renderItem={renderItem}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                    <View style={{ alignItems: 'center', marginTop: 50 }}>
+                        <Text style={{ color: COLORS.textSecondary }}>No properties found.</Text>
+                    </View>
+                }
             />
         </View>
     );

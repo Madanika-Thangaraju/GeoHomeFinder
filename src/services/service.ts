@@ -1,7 +1,7 @@
 import { RegisterUserPayload } from "../../src/types/tenant.types";
-import { getToken, removeToken, saveToken } from "../utils/auth";
+import { getToken, removeToken, saveToken, saveUser } from "../utils/auth";
 
-const BASE_URL = "http://192.168.7.12:3000";
+const BASE_URL = "http://192.168.1.138:3000";
 
 // ==================== REGISTER USER ====================
 export const registerUser = async (data: RegisterUserPayload) => {
@@ -61,6 +61,10 @@ export const loginUser = async (data: LoginPayload): Promise<LoginResponse> => {
 
   // ✅ SAVE TOKEN USING HELPER
   await saveToken(result.token);
+  // Save user details
+  if (result.user) {
+    await saveUser(result.user);
+  }
 
   return result;
 };
@@ -148,7 +152,32 @@ export const tenantProperties = async () => {
     throw new Error(result.message || "Failed to fetch properties");
   }
 
-  return result.data; 
+  return result.data;
+};
+
+// ==================== OWNER LISTINGS ====================
+export const getOwnerProperties = async (userId: number | string) => {
+  const token = await getToken();
+
+  if (!token) {
+    throw new Error("User not authenticated");
+  }
+
+  // Matching API route as requested: pass logged in user id
+  const response = await fetch(`${BASE_URL}/owners/listings/${userId}`, {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to fetch owner properties");
+  }
+
+  return result.data; // Assuming backend returns { data: [...] } like tenantProperties
 };
 
 
