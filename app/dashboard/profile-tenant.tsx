@@ -1,9 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 import { getProfile, updateProfile } from '../../src/services/service';
+
+const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
+
+interface PlacePrediction {
+    placeId: string;
+    text: {
+        text: string;
+    };
+    structuredFormat: {
+        mainText: {
+            text: string;
+        };
+        secondaryText: {
+            text: string;
+        };
+    };
+}
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -19,9 +36,15 @@ export default function ProfileScreen() {
         email: '',
         phone: '',
         location: '',
+        latitude: null as number | null,
+        longitude: null as number | null,
         memberSince: '',
         role: 'Tenant'
     });
+
+    const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+    const [showPredictions, setShowPredictions] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
 
     const [editData, setEditData] = useState({ ...userData });
 
@@ -37,9 +60,11 @@ export default function ProfileScreen() {
                 name: data.name || '',
                 email: data.email || '',
                 phone: data.phone || '',
-                location: data.location || 'Coimbatore, Tamil Nadu', // Default if empty
+                location: data.location || 'Coimbatore, Tamil Nadu',
+                latitude: data.latitude || null,
+                longitude: data.longitude || null,
                 memberSince: data.created_at ? new Date(data.created_at).toDateString() : '',
-                role: 'Tenant' // Or data.role if available
+                role: 'Tenant'
             };
             setUserData(mappedData);
             setEditData(mappedData);
@@ -54,7 +79,9 @@ export default function ProfileScreen() {
             await updateProfile({
                 name: editData.name,
                 phone: editData.phone,
-                location: editData.location
+                location: editData.location,
+                latitude: editData.latitude || undefined,
+                longitude: editData.longitude || undefined
             });
             setUserData({ ...editData });
             setShowEditProfile(false);
@@ -62,6 +89,79 @@ export default function ProfileScreen() {
         } catch (error) {
             console.error('Failed to update profile', error);
             Alert.alert("Error", "Failed to update profile");
+        }
+    };
+
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(() => {
+            if (editData.location.length > 2 && showEditProfile) {
+                searchPlaces(editData.location);
+            } else {
+                setPredictions([]);
+                setShowPredictions(false);
+            }
+        }, 500);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [editData.location]);
+
+    const searchPlaces = async (input: string) => {
+        try {
+            setIsSearching(true);
+            const response = await fetch(
+                `https://places.googleapis.com/v1/places:autocomplete`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+                    },
+                    body: JSON.stringify({
+                        input: input,
+                        locationBias: {
+                            circle: {
+                                center: {
+                                    latitude: 11.0168,
+                                    longitude: 76.9558,
+                                },
+                                radius: 50000.0,
+                            },
+                        },
+                    }),
+                }
+            );
+            const data = await response.json();
+            if (data.suggestions) {
+                const formattedPredictions = data.suggestions.map((s: any) => s.placePrediction);
+                setPredictions(formattedPredictions);
+                setShowPredictions(true);
+            }
+        } catch (error) {
+            console.error("Error fetching places:", error);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const selectPlace = async (prediction: PlacePrediction) => {
+        setEditData({ ...editData, location: prediction.text.text });
+        setShowPredictions(false);
+        setPredictions([]);
+
+        try {
+            const response = await fetch(
+                `https://places.googleapis.com/v1/places/${prediction.placeId}?fields=location&key=${GOOGLE_PLACES_API_KEY}`
+            );
+            const data = await response.json();
+            if (data.location) {
+                setEditData(prev => ({
+                    ...prev,
+                    latitude: data.location.latitude,
+                    longitude: data.location.longitude
+                }));
+            }
+        } catch (error) {
+            console.error("Error fetching place details:", error);
         }
     };
 
@@ -289,34 +389,64 @@ export default function ProfileScreen() {
                                 <Ionicons name="close" size={24} color={COLORS.textPrimary} />
                             </TouchableOpacity>
                         </View>
-                        <ScrollView showsVerticalScrollIndicator={false}>
+                        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                             <View style={styles.editRow}>
                                 <Text style={styles.editLabel}>Full Name</Text>
                                 <View style={styles.inputContainer}>
                                     <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} />
-                                    <Text style={styles.inputValue}>{editData.name}</Text>
-                                </View>
-                            </View>
-                            <View style={styles.editRow}>
-                                <Text style={styles.editLabel}>Email Address</Text>
-                                <View style={styles.inputContainer}>
-                                    <Ionicons name="mail-outline" size={20} color={COLORS.textSecondary} />
-                                    <Text style={styles.inputValue}>{editData.email}</Text>
+                                    <TextInput
+                                        style={styles.inputField}
+                                        value={editData.name}
+                                        onChangeText={(t) => setEditData({ ...editData, name: t })}
+                                        placeholder="Full Name"
+                                    />
                                 </View>
                             </View>
                             <View style={styles.editRow}>
                                 <Text style={styles.editLabel}>Phone Number</Text>
                                 <View style={styles.inputContainer}>
                                     <Ionicons name="call-outline" size={20} color={COLORS.textSecondary} />
-                                    <Text style={styles.inputValue}>{editData.phone}</Text>
+                                    <TextInput
+                                        style={styles.inputField}
+                                        value={editData.phone}
+                                        onChangeText={(t) => setEditData({ ...editData, phone: t })}
+                                        placeholder="Phone Number"
+                                        keyboardType="phone-pad"
+                                    />
                                 </View>
                             </View>
-                            <View style={styles.editRow}>
+                            <View style={[styles.editRow, { zIndex: 100 }]}>
                                 <Text style={styles.editLabel}>Location</Text>
                                 <View style={styles.inputContainer}>
                                     <Ionicons name="location-outline" size={20} color={COLORS.textSecondary} />
-                                    <Text style={styles.inputValue}>{editData.location}</Text>
+                                    <TextInput
+                                        style={styles.inputField}
+                                        value={editData.location}
+                                        onChangeText={(t) => setEditData({ ...editData, location: t })}
+                                        placeholder="Search city or area"
+                                    />
                                 </View>
+                                {showPredictions && predictions.length > 0 && (
+                                    <View style={styles.predictionsModalList}>
+                                        {predictions.map((item) => (
+                                            <TouchableOpacity
+                                                key={item.placeId}
+                                                style={styles.predictionItem}
+                                                onPress={() => selectPlace(item)}
+                                            >
+                                                <Ionicons name="location-outline" size={18} color={COLORS.textSecondary} style={{ marginRight: 10 }} />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.predictionMain} numberOfLines={1}>
+                                                        {item.structuredFormat.mainText.text}
+                                                    </Text>
+                                                    <Text style={styles.predictionSub} numberOfLines={1}>
+                                                        {item.structuredFormat.secondaryText.text}
+                                                    </Text>
+                                                </View>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
                             </View>
                             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveProfile}>
                                 <Text style={styles.saveBtnText}>Save Changes</Text>
@@ -463,4 +593,37 @@ const styles = StyleSheet.create({
     saveBtn: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 24 },
     saveBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 16 },
     legalText: { fontSize: 14, color: COLORS.textPrimary, lineHeight: 22, marginBottom: 16 },
+    inputField: { flex: 1, fontSize: 16, color: COLORS.textPrimary, paddingVertical: 0 },
+    predictionsModalList: {
+        backgroundColor: COLORS.white,
+        borderRadius: 12,
+        padding: 8,
+        maxHeight: 150,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        marginTop: 5,
+    },
+    predictionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    predictionMain: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.textPrimary,
+    },
+    predictionSub: {
+        fontSize: 12,
+        color: COLORS.textSecondary,
+        marginTop: 2,
+    },
 });

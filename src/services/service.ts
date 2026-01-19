@@ -136,10 +136,15 @@ export const addProperty = async (data: any) => {
 
 
 
-export const tenantProperties = async () => {
+export const tenantProperties = async (lat?: number, lng?: number, radius?: number) => {
   const token = await getToken();
 
-  const response = await fetch(`${BASE_URL}/tenants/all/properties`, {
+  let url = `${BASE_URL}/tenants/all/properties`;
+  if (lat && lng && radius) {
+    url += `?lat=${lat}&lng=${lng}&radius=${radius}`;
+  }
+
+  const response = await fetch(url, {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -204,8 +209,10 @@ export const updateProfile = async (payload: {
   name: string;
   phone: string;
   location: string;
+  latitude?: number;
+  longitude?: number;
 }) => {
-  const res = await fetch(`${BASE_URL}/api/profile`, {
+  const res = await fetch(`${BASE_URL}/owners/profile`, {
     method: "PUT",
     headers: await authHeaders(),
     body: JSON.stringify(payload),
@@ -216,7 +223,7 @@ export const updateProfile = async (payload: {
 };
 
 export const togglePushNotification = async () => {
-  const res = await fetch(`${BASE_URL}/api/profile/notifications`, {
+  const res = await fetch(`${BASE_URL}/owners/notifications`, {
     method: "PATCH",
     headers: await authHeaders(),
   });

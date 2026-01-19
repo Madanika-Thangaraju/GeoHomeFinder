@@ -20,7 +20,7 @@ import { COLORS, LAYOUT, SPACING } from "../../src/constants/theme";
 import { addProperty } from "../../src/services/service";
 
 // Replace with your Google Places API Key
-const GOOGLE_PLACES_API_KEY = "YOUR_GOOGLE_PLACES_API_KEY_HERE";
+const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
 
 const PROPERTY_TYPES = [
   { id: "house", label: "Independent House", sub: "Standalone property" },
@@ -34,11 +34,17 @@ const LISTING_TYPES = ["Sell", "Rent", "PG/Co-living"];
 const FURNISHING_TYPES = ["Unfurnished", "Semi-Furnished", "Fully Furnished"];
 
 interface PlacePrediction {
-  place_id: string;
-  description: string;
-  structured_formatting: {
-    main_text: string;
-    secondary_text: string;
+  placeId: string;
+  text: {
+    text: string;
+  };
+  structuredFormat: {
+    mainText: {
+      text: string;
+    };
+    secondaryText: {
+      text: string;
+    };
   };
 }
 
@@ -133,15 +139,37 @@ export default function AddPropertyScreen() {
     try {
       setSearchingAddress(true);
       const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-          input
-        )}&components=country:in&location=11.0168,76.9558&radius=50000&key=${GOOGLE_PLACES_API_KEY}`
+        `https://places.googleapis.com/v1/places:autocomplete`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+          },
+          body: JSON.stringify({
+            input: input,
+            locationBias: {
+              circle: {
+                center: {
+                  latitude: 11.0168,
+                  longitude: 76.9558,
+                },
+                radius: 50000.0,
+              },
+            },
+          }),
+        }
       );
       const data = await response.json();
+      console.log("Autocomplete API (New) Response:", data);
 
-      if (data.predictions) {
-        setPredictions(data.predictions);
+      if (data.suggestions) {
+        // Map New API suggestions to our internal Prediction format
+        const formattedPredictions = data.suggestions.map((s: any) => s.placePrediction);
+        setPredictions(formattedPredictions);
         setShowPredictions(true);
+      } else {
+        console.log("No suggestions found or error:", data.error || data.status);
       }
     } catch (error) {
       console.error("Error fetching places:", error);
@@ -151,23 +179,25 @@ export default function AddPropertyScreen() {
   };
 
   const selectPlace = async (prediction: PlacePrediction) => {
-    setAddress(prediction.description);
+    setAddress(prediction.text.text);
     setShowPredictions(false);
     setPredictions([]);
 
     try {
       const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=geometry&key=${GOOGLE_PLACES_API_KEY}`
+        `https://places.googleapis.com/v1/places/${prediction.placeId}?fields=location&key=${GOOGLE_PLACES_API_KEY}`
       );
       const data = await response.json();
+      console.log("Place Details (New) Response:", data);
 
-      if (data.result?.geometry?.location) {
+      if (data.location) {
         const coords = {
-          lat: data.result.geometry.location.lat,
-          lng: data.result.geometry.location.lng,
+          lat: data.location.latitude,
+          lng: data.location.longitude,
         };
+        console.log("Selected Location Coords:", coords);
         setLocationCoords(coords);
-        
+
         const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${coords.lat},${coords.lng}&zoom=15&size=600x300&markers=color:red%7C${coords.lat},${coords.lng}&key=${GOOGLE_PLACES_API_KEY}`;
         setMapUrl(staticMapUrl);
       }
@@ -490,6 +520,8 @@ export default function AddPropertyScreen() {
       price: hasSellingListing ? Number(price) : null,
     };
 
+    console.log("Submitting Property Payload:", JSON.stringify(payload, null, 2));
+
     try {
       setLoading(true);
       await addProperty(payload);
@@ -729,7 +761,7 @@ export default function AddPropertyScreen() {
         {hasSellingListing && (
           <>
             <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Pricing Details</Text>
-            
+
             <Text style={styles.label}>
               PRICE (₹) <Text style={styles.required}>*</Text>
             </Text>
@@ -753,7 +785,7 @@ export default function AddPropertyScreen() {
         {hasRentListing && hasNonPlotType && (
           <>
             <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Pricing Details</Text>
-            
+
             <Text style={styles.label}>
               MONTHLY RENT (₹) <Text style={styles.required}>*</Text>
             </Text>
@@ -813,19 +845,19 @@ export default function AddPropertyScreen() {
               }}
             />
             {searchingAddress && (
-              <ActivityIndicator 
-                size="small" 
-                color={COLORS.primary} 
+              <ActivityIndicator
+                size="small"
+                color={COLORS.primary}
                 style={styles.searchingIndicator}
               />
             )}
           </View>
-          
+
           {showPredictions && predictions.length > 0 && (
             <View style={styles.predictionsContainer}>
               <FlatList
                 data={predictions}
-                keyExtractor={(item) => item.place_id}
+                keyExtractor={(item) => item.placeId}
                 scrollEnabled={false}
                 renderItem={({ item }) => (
                   <TouchableOpacity
@@ -835,10 +867,10 @@ export default function AddPropertyScreen() {
                     <Ionicons name="location-outline" size={20} color={COLORS.primary} />
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={styles.predictionMain}>
-                        {item.structured_formatting.main_text}
+                        {item.structuredFormat.mainText.text}
                       </Text>
                       <Text style={styles.predictionSecondary}>
-                        {item.structured_formatting.secondary_text}
+                        {item.structuredFormat.secondaryText.text}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -869,7 +901,7 @@ export default function AddPropertyScreen() {
 
         {/* IMAGES SECTION */}
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Property Images</Text>
-        
+
         <Text style={styles.label}>
           PHOTOS <Text style={styles.required}>*</Text>
         </Text>
@@ -946,7 +978,7 @@ export default function AddPropertyScreen() {
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Property Photo</Text>
-            
+
             <TouchableOpacity
               style={styles.modalOption}
               onPress={takePhoto}
@@ -1060,7 +1092,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: 12,
   },
-  
+
   // Address Autocomplete Styles
   addressInputContainer: {
     position: 'relative',
@@ -1071,13 +1103,19 @@ const styles = StyleSheet.create({
     top: 14,
   },
   predictionsContainer: {
+    position: 'absolute',
+    top: 55, // Positioned below the input
+    left: 0,
+    right: 0,
     backgroundColor: COLORS.white,
     borderRadius: 12,
-    marginTop: 8,
+    marginTop: 0,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     maxHeight: 250,
+    zIndex: 1000,
     ...LAYOUT.shadow,
+    elevation: 8, // Higher elevation to be on top
   },
   predictionItem: {
     flexDirection: 'row',

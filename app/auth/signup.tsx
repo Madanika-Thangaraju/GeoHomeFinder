@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
@@ -17,6 +18,23 @@ import { GlowButton } from '../../src/components/shared/GlowButton';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 import { registerUser } from '../../src/services/service';
 
+const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
+
+interface PlacePrediction {
+    placeId: string;
+    text: {
+        text: string;
+    };
+    structuredFormat: {
+        mainText: {
+            text: string;
+        };
+        secondaryText: {
+            text: string;
+        };
+    };
+}
+
 export default function SignupScreen() {
     const router = useRouter();
 
@@ -27,6 +45,100 @@ export default function SignupScreen() {
     const [isAgreed, setIsAgreed] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [addressSearch, setAddressSearch] = useState('');
+    const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+    const [showPredictions, setShowPredictions] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
+
+    useEffect(() => {
+        const fetchLocation = async () => {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                console.log('Permission to access location was denied');
+                return;
+            }
+
+            let loc = await Location.getCurrentPositionAsync({});
+            setLocation({
+                lat: loc.coords.latitude,
+                lng: loc.coords.longitude,
+            });
+        };
+        fetchLocation();
+    }, []);
+
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(() => {
+            if (addressSearch.length > 2) {
+                searchPlaces(addressSearch);
+            } else {
+                setPredictions([]);
+                setShowPredictions(false);
+            }
+        }, 500);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [addressSearch]);
+
+    const searchPlaces = async (input: string) => {
+        try {
+            setIsSearching(true);
+            const response = await fetch(
+                `https://places.googleapis.com/v1/places:autocomplete`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+                    },
+                    body: JSON.stringify({
+                        input: input,
+                        locationBias: {
+                            circle: {
+                                center: {
+                                    latitude: 11.0168,
+                                    longitude: 76.9558,
+                                },
+                                radius: 50000.0,
+                            },
+                        },
+                    }),
+                }
+            );
+            const data = await response.json();
+            if (data.suggestions) {
+                const formattedPredictions = data.suggestions.map((s: any) => s.placePrediction);
+                setPredictions(formattedPredictions);
+                setShowPredictions(true);
+            }
+        } catch (error) {
+            console.error("Error fetching places:", error);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const selectPlace = async (prediction: PlacePrediction) => {
+        setAddressSearch(prediction.text.text);
+        setShowPredictions(false);
+        setPredictions([]);
+
+        try {
+            const response = await fetch(
+                `https://places.googleapis.com/v1/places/${prediction.placeId}?fields=location&key=${GOOGLE_PLACES_API_KEY}`
+            );
+            const data = await response.json();
+            if (data.location) {
+                setLocation({
+                    lat: data.location.latitude,
+                    lng: data.location.longitude,
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching place details:", error);
+        }
+    };
 
     // Validation errors
     const [errors, setErrors] = useState({
@@ -147,6 +259,8 @@ export default function SignupScreen() {
                 email,
                 phone,
                 password,
+                latitude: location?.lat,
+                longitude: location?.lng,
             });
 
             // Success toast
@@ -234,6 +348,38 @@ export default function SignupScreen() {
                             {errors.phone ? (
                                 <Text style={styles.errorText}>{errors.phone}</Text>
                             ) : null}
+
+                            <View style={{ zIndex: 100 }}>
+                                <CustomInput
+                                    label="Location"
+                                    value={addressSearch}
+                                    onChangeText={setAddressSearch}
+                                    placeholder="Search your city or area"
+                                    style={styles.inputSpacer}
+                                    variant="standard"
+                                />
+                                {showPredictions && predictions.length > 0 && (
+                                    <View style={styles.predictionsList}>
+                                        {predictions.map((item) => (
+                                            <TouchableOpacity
+                                                key={item.placeId}
+                                                style={styles.predictionItem}
+                                                onPress={() => selectPlace(item)}
+                                            >
+                                                <Ionicons name="location-outline" size={18} color={COLORS.textSecondary} style={{ marginRight: 10 }} />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.predictionMain} numberOfLines={1}>
+                                                        {item.structuredFormat.mainText.text}
+                                                    </Text>
+                                                    <Text style={styles.predictionSub} numberOfLines={1}>
+                                                        {item.structuredFormat.secondaryText.text}
+                                                    </Text>
+                                                </View>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+                            </View>
 
                             <View>
                                 <CustomInput
@@ -405,5 +551,38 @@ const styles = StyleSheet.create({
         right: 12,
         top: 42,
         padding: 4,
+    },
+    predictionsList: {
+        backgroundColor: COLORS.white,
+        borderRadius: 12,
+        padding: 8,
+        maxHeight: 200,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        marginTop: -10,
+        marginBottom: 10,
+    },
+    predictionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    predictionMain: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.textPrimary,
+    },
+    predictionSub: {
+        fontSize: 12,
+        color: COLORS.textSecondary,
+        marginTop: 2,
     },
 });

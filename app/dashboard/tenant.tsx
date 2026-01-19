@@ -19,6 +19,23 @@ import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 
 const { width } = Dimensions.get('window');
 
+const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
+
+interface PlacePrediction {
+  placeId: string;
+  text: {
+    text: string;
+  };
+  structuredFormat: {
+    mainText: {
+      text: string;
+    };
+    secondaryText: {
+      text: string;
+    };
+  };
+}
+
 export default function TenantDashboard() {
   const router = useRouter();
 
@@ -33,7 +50,10 @@ export default function TenantDashboard() {
 
   // ✅ Favorites and search state
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('Gandhipuram, Coimbatore');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+  const [showPredictions, setShowPredictions] = useState(false);
+  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   // ✅ Load favorites from AsyncStorage
   useEffect(() => {
@@ -51,46 +71,129 @@ export default function TenantDashboard() {
   }, []);
 
   // ✅ Fetch properties from API and ensure high-quality images
+  const fetchProperties = async (lat?: number, lng?: number, rad?: number) => {
+    const HOUSE_IMAGES = [
+      'https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&q=80&w=800',
+      'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&q=80&w=800',
+      'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=800',
+      'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800',
+      'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&q=80&w=800',
+      'https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&q=80&w=800',
+    ];
+
+    try {
+      setLoading(true);
+      const data = await tenantProperties(lat, lng, rad);
+      // Limit to 6 properties and inject high-quality house images
+      const enrichedData = (data || []).slice(0, 6).map((prop: any, index: number) => ({
+        ...prop,
+        image: { uri: HOUSE_IMAGES[index % HOUSE_IMAGES.length] },
+        status: 'Available', // Ensuring all are available as requested
+        isSoldOut: false,
+      }));
+      setProperties(enrichedData);
+    } catch (error) {
+      console.error('Failed to load properties', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUserProfile = async () => {
+    try {
+      const profile = await getProfile();
+      setUserProfile(profile);
+      if (profile.latitude && profile.longitude && !locationCoords) {
+        setLocationCoords({ lat: profile.latitude, lng: profile.longitude });
+      }
+    } catch (error) {
+      console.error('Failed to load profile', error);
+    }
+  };
+
   useEffect(() => {
-    const fetchProperties = async () => {
-      const HOUSE_IMAGES = [
-        'https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&q=80&w=800',
-      ];
-
-      try {
-        const data = await tenantProperties();
-        // Limit to 6 properties and inject high-quality house images
-        const enrichedData = data.slice(0, 6).map((prop: any, index: number) => ({
-          ...prop,
-          image: { uri: HOUSE_IMAGES[index % HOUSE_IMAGES.length] },
-          status: 'Available', // Ensuring all are available as requested
-          isSoldOut: false,
-        }));
-        setProperties(enrichedData);
-      } catch (error) {
-        console.error('Failed to load properties', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const fetchUserProfile = async () => {
-      try {
-        const profile = await getProfile();
-        setUserProfile(profile);
-      } catch (error) {
-        console.error('Failed to load profile', error);
-      }
-    };
-
-    fetchProperties();
     fetchUserProfile();
   }, []);
+
+  useEffect(() => {
+    fetchProperties(locationCoords?.lat, locationCoords?.lng, radius);
+  }, [locationCoords, radius]);
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (searchQuery.length > 2) {
+        searchPlaces(searchQuery);
+      } else {
+        setPredictions([]);
+        setShowPredictions(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  const searchPlaces = async (input: string) => {
+    try {
+      const response = await fetch(
+        `https://places.googleapis.com/v1/places:autocomplete`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+          },
+          body: JSON.stringify({
+            input: input,
+            locationBias: {
+              circle: {
+                center: {
+                  latitude: 11.0168,
+                  longitude: 76.9558,
+                },
+                radius: 50000.0,
+              },
+            },
+          }),
+        }
+      );
+      const data = await response.json();
+      console.log("Tenant: Autocomplete API (New) Response:", data);
+
+      if (data.suggestions) {
+        // Map New API suggestions to our internal Prediction format
+        const formattedPredictions = data.suggestions.map((s: any) => s.placePrediction);
+        setPredictions(formattedPredictions);
+        setShowPredictions(true);
+      }
+    } catch (error) {
+      console.error("Error fetching places:", error);
+    }
+  };
+
+  const selectPlace = async (prediction: PlacePrediction) => {
+    setSearchQuery(prediction.text.text);
+    setShowPredictions(false);
+    setPredictions([]);
+
+    try {
+      const response = await fetch(
+        `https://places.googleapis.com/v1/places/${prediction.placeId}?fields=location&key=${GOOGLE_PLACES_API_KEY}`
+      );
+      const data = await response.json();
+      console.log("Tenant: Place Details (New) Response:", data);
+
+      if (data.location) {
+        const coords = {
+          lat: data.location.latitude,
+          lng: data.location.longitude,
+        };
+        console.log("Tenant: Selected Location Coords:", coords);
+        setLocationCoords(coords);
+      }
+    } catch (error) {
+      console.error("Error fetching place details:", error);
+    }
+  };
 
   // ✅ Toggle favorite functionality
   const toggleFavorite = async (propertyId: string) => {
@@ -144,7 +247,7 @@ export default function TenantDashboard() {
     };
   };
 
-  if (loading) {
+  if (loading && properties.length === 0) {
     return (
       <View style={styles.loading}>
         <Text>Loading properties...</Text>
@@ -195,6 +298,29 @@ export default function TenantDashboard() {
             <Ionicons name="filter" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
+
+        {/* Predictions List */}
+        {showPredictions && predictions.length > 0 && (
+          <View style={styles.predictionsContainer}>
+            {predictions.map((item) => (
+              <TouchableOpacity
+                key={item.placeId}
+                style={styles.predictionItem}
+                onPress={() => selectPlace(item)}
+              >
+                <Ionicons name="location-outline" size={18} color={COLORS.textSecondary} style={{ marginRight: 10 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.predictionMain} numberOfLines={1}>
+                    {item.structuredFormat.mainText.text}
+                  </Text>
+                  <Text style={styles.predictionSub} numberOfLines={1}>
+                    {item.structuredFormat.secondaryText.text}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         <View style={styles.filterRow}>
           {['pin', 'radius', 'draw'].map((mode) => (
@@ -446,6 +572,33 @@ const styles = StyleSheet.create({
   activePill: { backgroundColor: COLORS.primary },
   pillText: { fontSize: 11, fontWeight: '500' },
   activePillText: { color: COLORS.white },
+
+  predictionsContainer: {
+    backgroundColor: COLORS.white,
+    marginTop: 5,
+    borderRadius: 12,
+    padding: 8,
+    maxHeight: 250,
+    ...LAYOUT.shadow,
+  },
+  predictionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  predictionMain: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  predictionSub: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
 
   // Compact Controls in Bottom Sheet
   compactControls: {

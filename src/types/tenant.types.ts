@@ -19,6 +19,9 @@ export interface RegisterUserPayload {
   email: string;
   phone: string;
   password: string;
+  latitude?: number;
+  longitude?: number;
+  location?: string;
 }
 
 export interface User {
