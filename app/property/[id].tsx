@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Dimensions, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../src/constants/theme';
 import { PROPERTIES } from '../../src/data/properties';
+import { getProperty } from '../../src/services/service';
 
 const { width, height } = Dimensions.get('window');
 
@@ -40,7 +41,8 @@ export default function PropertyDetail() {
     const router = useRouter();
 
     const idString = Array.isArray(id) ? id[0] : id;
-    const property = PROPERTIES.find(p => p.id === Number(idString)) || PROPERTIES[0];
+    const [property, setProperty] = useState<any>(PROPERTIES.find(p => p.id === Number(idString)) || PROPERTIES[0]);
+    const [loading, setLoading] = useState(true);
 
     // State for Modal and Selection
     const [isTourModalVisible, setIsTourModalVisible] = useState(false);
@@ -48,6 +50,54 @@ export default function PropertyDetail() {
     const [userTimeInput, setUserTimeInput] = useState('');
     const [userMessage, setUserMessage] = useState('');
     const [isRequesting, setIsRequesting] = useState(false);
+
+    React.useEffect(() => {
+        fetchPropertyData();
+    }, [idString]);
+
+    const fetchPropertyData = async () => {
+        try {
+            setLoading(true);
+            const data = await getProperty(idString);
+            if (data) {
+                // Map API data to UI structure if needed, or use directly
+                setProperty({
+                    ...data,
+                    // Fallback to static props if missing in API
+                    title: data.title || property.title,
+                    price: data.rentPrice ? `₹${data.rentPrice}` : (data.price ? `₹${data.price}` : property.price),
+                    address: data.address || property.address,
+                    description: data.description || property.description,
+                    bedrooms: data.bedrooms || property.bedrooms,
+                    bathrooms: data.bathrooms || property.bathrooms,
+                    size: data.sqft ? `${data.sqft} sqft` : property.size,
+                    image: data.images && data.images.length > 0 ? { uri: data.images[0] } : (data.image_url ? { uri: data.image_url } : property.image),
+                    owner: {
+                        ...property.owner,
+                        name: data.owner_name || (data.user?.name) || property.owner.name,
+                        image: data.owner_image ? { uri: data.owner_image } : property.owner.image,
+                        phone: data.owner_phone || (data.user?.phone) || property.owner.phone,
+                    },
+                    latitude: data.latitude,
+                    longitude: data.longitude
+                });
+            }
+        } catch (error) {
+            console.error("Failed to fetch property details:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+            </View>
+        );
+    }
 
     const availableDays = getNext7Days();
 
@@ -203,7 +253,11 @@ export default function PropertyDetail() {
                         <Text style={styles.sectionTitle}>Location</Text>
                         <View style={styles.mapCard}>
                             <Image
-                                source={{ uri: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=800&q=80' }}
+                                source={{
+                                    uri: property.latitude && property.longitude ?
+                                        `https://maps.googleapis.com/maps/api/staticmap?center=${property.latitude},${property.longitude}&zoom=15&size=600x300&markers=color:red%7C${property.latitude},${property.longitude}&key=${GOOGLE_PLACES_API_KEY}` :
+                                        'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=800&q=80'
+                                }}
                                 style={styles.mapImage}
                             />
                             <View style={styles.mapOverlay}>

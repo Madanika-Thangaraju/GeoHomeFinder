@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -38,6 +39,7 @@ export default function ProfileScreen() {
         location: '',
         latitude: null as number | null,
         longitude: null as number | null,
+        image: null as string | null,
         memberSince: '',
         role: 'Tenant'
     });
@@ -63,6 +65,7 @@ export default function ProfileScreen() {
                 location: data.location || 'Coimbatore, Tamil Nadu',
                 latitude: data.latitude || null,
                 longitude: data.longitude || null,
+                image: data.image || null,
                 memberSince: data.created_at ? new Date(data.created_at).toDateString() : '',
                 role: 'Tenant'
             };
@@ -70,7 +73,21 @@ export default function ProfileScreen() {
             setEditData(mappedData);
         } catch (error) {
             console.error('Failed to load profile', error);
-            // Fallback or Alert?
+        }
+    };
+
+    const pickImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+            base64: true,
+        });
+
+        if (!result.canceled && result.assets[0].base64) {
+            const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+            setEditData({ ...editData, image: base64Image });
         }
     };
 
@@ -81,7 +98,8 @@ export default function ProfileScreen() {
                 phone: editData.phone,
                 location: editData.location,
                 latitude: editData.latitude || undefined,
-                longitude: editData.longitude || undefined
+                longitude: editData.longitude || undefined,
+                image: editData.image || undefined
             });
             setUserData({ ...editData });
             setShowEditProfile(false);
@@ -103,7 +121,7 @@ export default function ProfileScreen() {
         }, 500);
 
         return () => clearTimeout(delayDebounceFn);
-    }, [editData.location]);
+    }, [editData.location, showEditProfile]);
 
     const searchPlaces = async (input: string) => {
         try {
@@ -229,7 +247,7 @@ export default function ProfileScreen() {
                 <View style={styles.profileSection}>
                     <View style={styles.avatarContainer}>
                         <Image
-                            source={{ uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80' }}
+                            source={userData.image ? { uri: userData.image } : { uri: 'https://cdn-icons-png.flaticon.com/512/149/149071.png' }}
                             style={styles.avatar}
                         />
                         <TouchableOpacity
@@ -387,6 +405,18 @@ export default function ProfileScreen() {
                             <Text style={styles.modalTitle}>Edit Profile</Text>
                             <TouchableOpacity onPress={() => setShowEditProfile(false)}>
                                 <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.avatarEditContainer}>
+                            <TouchableOpacity onPress={pickImage} style={styles.avatarContainer}>
+                                <Image
+                                    source={editData.image ? { uri: editData.image } : { uri: 'https://cdn-icons-png.flaticon.com/512/149/149071.png' }}
+                                    style={styles.avatarLarge}
+                                />
+                                <View style={styles.avatarOverlay}>
+                                    <Ionicons name="camera" size={24} color={COLORS.white} />
+                                    <Text style={styles.cameraText}>Change Photo</Text>
+                                </View>
                             </TouchableOpacity>
                         </View>
                         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -594,6 +624,10 @@ const styles = StyleSheet.create({
     saveBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 16 },
     legalText: { fontSize: 14, color: COLORS.textPrimary, lineHeight: 22, marginBottom: 16 },
     inputField: { flex: 1, fontSize: 16, color: COLORS.textPrimary, paddingVertical: 0 },
+    avatarEditContainer: { alignItems: 'center', marginBottom: 20 },
+    avatarLarge: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#F1F5F9' },
+    avatarOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 60, justifyContent: 'center', alignItems: 'center' },
+    cameraText: { color: COLORS.white, fontSize: 10, fontWeight: 'bold', marginTop: 4 },
     predictionsModalList: {
         backgroundColor: COLORS.white,
         borderRadius: 12,

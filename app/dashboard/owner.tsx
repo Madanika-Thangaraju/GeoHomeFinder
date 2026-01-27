@@ -21,6 +21,7 @@ import { decodeToken, getToken, getUser } from '../../src/utils/auth';
 export default function OwnerDashboard() {
     const router = useRouter();
     const [listingsCount, setListingsCount] = useState<number | string>('-');
+    const [userProfile, setUserProfile] = useState<any>(null);
 
     useFocusEffect(
         useCallback(() => {
@@ -46,12 +47,15 @@ export default function OwnerDashboard() {
                     }
 
                     // 3. Fallback to Profile API
-                    if (!userId) {
+                    if (true) { // Always fetch profile for dynamic data
                         try {
                             const profile = await getProfile();
-                            if (profile?.id) userId = profile.id;
-                            else if (profile?.user?.id) userId = profile.user.id;
-                            else if (profile?.data?.id) userId = profile.data.id;
+                            setUserProfile(profile);
+                            if (!userId) {
+                                if (profile?.id) userId = profile.id;
+                                else if (profile?.user?.id) userId = profile.user.id;
+                                else if (profile?.data?.id) userId = profile.data.id;
+                            }
                         } catch (e) {
                             console.log("Failed to get profile", e);
                         }
@@ -99,7 +103,7 @@ export default function OwnerDashboard() {
                             </View>
                             <View>
                                 <Text style={styles.brandTitle}>GEOHOME</Text>
-                                <Text style={styles.locationText}>Coimbatore, IN</Text>
+                                <Text style={styles.locationText}>{userProfile?.location || 'Coimbatore, IN'}</Text>
                             </View>
                         </View>
                     </View>
@@ -118,14 +122,18 @@ export default function OwnerDashboard() {
                         </TouchableOpacity>
 
                         <TouchableOpacity onPress={() => router.push('/dashboard/profile-owner')}>
-                            <Ionicons name="person-circle-outline" size={40} color={COLORS.textSecondary} />
+                            {userProfile?.image ? (
+                                <RNImage source={{ uri: userProfile.image }} style={styles.profileImage} />
+                            ) : (
+                                <Ionicons name="person-circle-outline" size={40} color={COLORS.textSecondary} />
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
 
                 {/* Greeting */}
                 <Animated.View entering={FadeInDown.delay(100)}>
-                    <Text style={styles.greeting}>Welcome back, Owner</Text>
+                    <Text style={styles.greeting}>Welcome back, {userProfile?.name?.split(' ')[0] || 'Owner'}</Text>
                     <Text style={styles.mainTitle}>
                         Manage your{'\n'}Real Estate Portfolio
                     </Text>

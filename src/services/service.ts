@@ -1,7 +1,7 @@
 import { RegisterUserPayload } from "../../src/types/tenant.types";
 import { getToken, removeToken, saveToken, saveUser } from "../utils/auth";
 
-const BASE_URL = "http://192.168.1.138:3000";
+const BASE_URL = "http://10.63.169.246:3000";
 
 // ==================== REGISTER USER ====================
 export const registerUser = async (data: RegisterUserPayload) => {
@@ -136,12 +136,26 @@ export const addProperty = async (data: any) => {
 
 
 
-export const tenantProperties = async (lat?: number, lng?: number, radius?: number) => {
+export const tenantProperties = async (lat?: number, lng?: number, radius?: number, filters?: any) => {
   const token = await getToken();
 
   let url = `${BASE_URL}/tenants/all/properties`;
-  if (lat && lng && radius) {
-    url += `?lat=${lat}&lng=${lng}&radius=${radius}`;
+  const params = new URLSearchParams();
+
+  if (lat) params.append("lat", lat.toString());
+  if (lng) params.append("lng", lng.toString());
+  if (radius) params.append("radius", radius.toString());
+
+  if (filters) {
+    if (filters.minPrice) params.append("minPrice", filters.minPrice);
+    if (filters.maxPrice) params.append("maxPrice", filters.maxPrice);
+    if (filters.propertyType) params.append("propertyType", filters.propertyType);
+    if (filters.bedrooms) params.append("bedrooms", filters.bedrooms);
+  }
+
+  const queryString = params.toString();
+  if (queryString) {
+    url += `?${queryString}`;
   }
 
   const response = await fetch(url, {
@@ -158,6 +172,23 @@ export const tenantProperties = async (lat?: number, lng?: number, radius?: numb
   }
 
   return result.data;
+};
+
+export const getProperty = async (id: number | string) => {
+  const token = await getToken();
+
+  try {
+    const allProperties = await tenantProperties();
+    if (allProperties && Array.isArray(allProperties)) {
+      const property = allProperties.find((p: any) => p.id.toString() === id.toString());
+      if (property) return property;
+    }
+
+    return null;
+  } catch (error) {
+    console.log("Error fetching property, using local data:", error);
+    return null;
+  }
 };
 
 // ==================== OWNER LISTINGS ====================
@@ -211,6 +242,7 @@ export const updateProfile = async (payload: {
   location: string;
   latitude?: number;
   longitude?: number;
+  image?: string;
 }) => {
   const res = await fetch(`${BASE_URL}/owners/profile`, {
     method: "PUT",

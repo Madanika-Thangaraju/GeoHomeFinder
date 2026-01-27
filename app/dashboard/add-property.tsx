@@ -57,6 +57,7 @@ export default function AddPropertyScreen() {
   const router = useRouter();
 
   const [propertyTitle, setPropertyTitle] = useState("");
+  const [propertyDescription, setPropertyDescription] = useState("");
   const [listingTypes, setListingTypes] = useState<string[]>([]);
   const [propertyTypes, setPropertyTypes] = useState<string[]>([]);
   const [address, setAddress] = useState("");
@@ -516,6 +517,7 @@ export default function AddPropertyScreen() {
       rentPrice: (hasRentListing && hasNonPlotType) ? Number(rentPrice) : null,
       deposit: (hasRentListing && hasNonPlotType) ? Number(deposit) : null,
       furnishing: hasNonPlotType ? furnishing : null,
+      description: propertyDescription.trim(),
       images: images,
       price: hasSellingListing ? Number(price) : null,
     };
@@ -569,6 +571,19 @@ export default function AddPropertyScreen() {
         {errors.propertyTitle && (
           <Text style={styles.errorText}>{errors.propertyTitle}</Text>
         )}
+
+        {/* DESCRIPTION */}
+        <Text style={styles.label}>
+          PROPERTY DESCRIPTION
+        </Text>
+        <TextInput
+          style={[styles.textInput, { height: 100, textAlignVertical: 'top', paddingTop: 12 }]}
+          placeholder="Detailed description of your property, surroundings, and rules..."
+          value={propertyDescription}
+          onChangeText={setPropertyDescription}
+          multiline
+          numberOfLines={4}
+        />
 
         {/* LISTING TYPE */}
         <Text style={styles.label}>

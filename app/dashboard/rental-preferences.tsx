@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -167,7 +168,25 @@ export default function RentalPreferencesScreen() {
                 </View>
 
                 {/* Save Button */}
-                <TouchableOpacity style={styles.saveButton} onPress={() => router.push('/dashboard/search-results')}>
+                <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={async () => {
+                        try {
+                            const prefs = {
+                                purpose,
+                                minBudget,
+                                maxBudget,
+                                selectedPropertyType,
+                                selectedConfig,
+                            };
+                            await AsyncStorage.setItem('rentalPreferences', JSON.stringify(prefs));
+                            console.log("RentalPreferences: Saved preferences:", prefs);
+                            router.back(); // Go back to dashboard which will re-fetch
+                        } catch (error) {
+                            console.error("Failed to save rental preferences", error);
+                        }
+                    }}
+                >
                     <Text style={styles.saveButtonText}>Save Preferences</Text>
                     <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
                 </TouchableOpacity>

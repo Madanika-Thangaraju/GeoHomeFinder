@@ -1,6 +1,6 @@
 import { getProfile, tenantProperties } from '@/src/services/service';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Dimensions,
   Image,
@@ -20,6 +20,10 @@ import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 const { width } = Dimensions.get('window');
 
 const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
+
+const getStaticMapUrl = (lat: number, lng: number) => {
+  return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=14&size=600x600&maptype=roadmap&key=${GOOGLE_PLACES_API_KEY}`;
+};
 
 interface PlacePrediction {
   placeId: string;
@@ -54,6 +58,7 @@ export default function TenantDashboard() {
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [showPredictions, setShowPredictions] = useState(false);
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [placeImage, setPlaceImage] = useState<string>(getStaticMapUrl(11.0168, 76.9558)); // Default to Coimbatore map
 
   // ✅ Load favorites from AsyncStorage
   useEffect(() => {
@@ -83,14 +88,38 @@ export default function TenantDashboard() {
 
     try {
       setLoading(true);
-      const data = await tenantProperties(lat, lng, rad);
-      // Limit to 6 properties and inject high-quality house images
-      const enrichedData = (data || []).slice(0, 6).map((prop: any, index: number) => ({
-        ...prop,
-        image: { uri: HOUSE_IMAGES[index % HOUSE_IMAGES.length] },
-        status: 'Available', // Ensuring all are available as requested
-        isSoldOut: false,
-      }));
+      // Load preferences from AsyncStorage
+      const prefsString = await AsyncStorage.getItem('rentalPreferences');
+      let filters = null;
+      if (prefsString) {
+        const prefs = JSON.parse(prefsString);
+        filters = {
+          minPrice: prefs.minBudget,
+          maxPrice: prefs.maxBudget,
+          propertyType: prefs.selectedPropertyType,
+          bedrooms: prefs.selectedConfig?.split(' ')[0], // Extracts '1' from '1 BHK'
+        };
+      }
+
+      console.log("Tenant: Fetching properties with filters:", { lat, lng, rad, filters });
+      const data = await tenantProperties(lat, lng, rad, filters);
+      // Limit to 6 properties and use backend image if available, otherwise fallback
+      const enrichedData = (data || []).slice(0, 6).map((prop: any, index: number) => {
+        let propertyImage = { uri: HOUSE_IMAGES[index % HOUSE_IMAGES.length] };
+
+        if (prop.images && prop.images.length > 0) {
+          propertyImage = { uri: prop.images[0] };
+        } else if (prop.image_url) {
+          propertyImage = { uri: prop.image_url };
+        }
+
+        return {
+          ...prop,
+          image: propertyImage,
+          status: 'Available',
+          isSoldOut: false,
+        };
+      });
       setProperties(enrichedData);
     } catch (error) {
       console.error('Failed to load properties', error);
@@ -104,7 +133,9 @@ export default function TenantDashboard() {
       const profile = await getProfile();
       setUserProfile(profile);
       if (profile.latitude && profile.longitude && !locationCoords) {
-        setLocationCoords({ lat: profile.latitude, lng: profile.longitude });
+        const coords = { lat: profile.latitude, lng: profile.longitude };
+        setLocationCoords(coords);
+        setPlaceImage(getStaticMapUrl(coords.lat, coords.lng));
       }
     } catch (error) {
       console.error('Failed to load profile', error);
@@ -115,9 +146,12 @@ export default function TenantDashboard() {
     fetchUserProfile();
   }, []);
 
-  useEffect(() => {
-    fetchProperties(locationCoords?.lat, locationCoords?.lng, radius);
-  }, [locationCoords, radius]);
+  // ✅ Re-fetch when screen is focused (to pick up new rental preferences)
+  useFocusEffect(
+    useCallback(() => {
+      fetchProperties(locationCoords?.lat, locationCoords?.lng, radius);
+    }, [locationCoords, radius])
+  );
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -176,6 +210,7 @@ export default function TenantDashboard() {
     setPredictions([]);
 
     try {
+      // Fetch location
       const response = await fetch(
         `https://places.googleapis.com/v1/places/${prediction.placeId}?fields=location&key=${GOOGLE_PLACES_API_KEY}`
       );
@@ -189,6 +224,11 @@ export default function TenantDashboard() {
         };
         console.log("Tenant: Selected Location Coords:", coords);
         setLocationCoords(coords);
+
+        // Generate static map URL
+        const mapUrl = getStaticMapUrl(coords.lat, coords.lng);
+        console.log("Tenant: Dynamic Static Map URL:", mapUrl);
+        setPlaceImage(mapUrl);
       }
     } catch (error) {
       console.error("Error fetching place details:", error);
@@ -272,8 +312,8 @@ export default function TenantDashboard() {
           onPress={() => router.push('/dashboard/profile-tenant')}
         >
           <Image
-            source={{
-              uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
+            source={userProfile?.image ? { uri: userProfile.image } : {
+              uri: 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
             }}
             style={styles.profileImage}
           />
@@ -349,7 +389,7 @@ export default function TenantDashboard() {
       <View style={styles.mapLayer}>
         <Image
           source={{
-            uri: 'https://images.unsplash.com/photo-1524661135-423995f22d0b',
+            uri: placeImage,
           }}
           style={StyleSheet.absoluteFillObject}
         />
