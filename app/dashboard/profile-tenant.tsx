@@ -355,7 +355,7 @@ export default function ProfileScreen() {
             </ScrollView>
 
             {/* Personal Details Modal */}
-            <Modal animationType="slide" transparent={true} visible={showPersonalDetails} onRequestClose={() => setShowPersonalDetails(false)}>
+            <Modal animationType="fade" transparent={true} visible={showPersonalDetails} onRequestClose={() => setShowPersonalDetails(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
@@ -398,7 +398,7 @@ export default function ProfileScreen() {
             </Modal>
 
             {/* Edit Profile Modal */}
-            <Modal animationType="slide" transparent={true} visible={showEditProfile} onRequestClose={() => setShowEditProfile(false)}>
+            <Modal animationType="fade" transparent={true} visible={showEditProfile} onRequestClose={() => setShowEditProfile(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
@@ -490,7 +490,7 @@ export default function ProfileScreen() {
             </Modal>
 
             {/* Help & Support Modal */}
-            <Modal animationType="slide" transparent={true} visible={showHelpSupport} onRequestClose={() => setShowHelpSupport(false)}>
+            <Modal animationType="fade" transparent={true} visible={showHelpSupport} onRequestClose={() => setShowHelpSupport(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
@@ -521,7 +521,7 @@ export default function ProfileScreen() {
             </Modal>
 
             {/* Terms & Policies Modal */}
-            <Modal animationType="slide" transparent={true} visible={showTermsPolicies} onRequestClose={() => setShowTermsPolicies(false)}>
+            <Modal animationType="fade" transparent={true} visible={showTermsPolicies} onRequestClose={() => setShowTermsPolicies(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
@@ -603,8 +603,8 @@ const styles = StyleSheet.create({
     menuIconBox: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
     menuText: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },
     menuDivider: { height: 1, backgroundColor: '#F1F5F9', marginLeft: 64 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 400 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+    modalContent: { backgroundColor: COLORS.white, borderRadius: 28, padding: 24, width: '85%', maxHeight: '80%', ...LAYOUT.shadow, elevation: 10 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
     modalTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.textPrimary },
     detailRow: { marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingBottom: 12 },

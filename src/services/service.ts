@@ -1,7 +1,7 @@
 import { RegisterUserPayload } from "../../src/types/tenant.types";
 import { getToken, removeToken, saveToken, saveUser } from "../utils/auth";
 
-const BASE_URL = "http://10.63.169.246:3000";
+const BASE_URL = "http://192.168.29.40:3000";
 
 // ==================== REGISTER USER ====================
 export const registerUser = async (data: RegisterUserPayload) => {
@@ -134,6 +134,55 @@ export const addProperty = async (data: any) => {
   return result;
 };
 
+export const updateProperty = async (id: number | string, data: any) => {
+  const token = await getToken();
+
+  if (!token) {
+    throw new Error("User not authenticated");
+  }
+
+  const response = await fetch(`${BASE_URL}/properties/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to update property");
+  }
+
+  return result;
+};
+
+export const deleteProperty = async (id: number | string) => {
+  const token = await getToken();
+
+  if (!token) {
+    throw new Error("User not authenticated");
+  }
+
+  const response = await fetch(`${BASE_URL}/properties/${id}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to delete property");
+  }
+
+  return result;
+};
+
 
 
 export const tenantProperties = async (lat?: number, lng?: number, radius?: number, filters?: any) => {
@@ -151,6 +200,7 @@ export const tenantProperties = async (lat?: number, lng?: number, radius?: numb
     if (filters.maxPrice) params.append("maxPrice", filters.maxPrice);
     if (filters.propertyType) params.append("propertyType", filters.propertyType);
     if (filters.bedrooms) params.append("bedrooms", filters.bedrooms);
+    if (filters.listingType) params.append("listingType", filters.listingType);
   }
 
   const queryString = params.toString();
@@ -263,3 +313,34 @@ export const togglePushNotification = async () => {
   if (!res.ok) throw new Error("Failed to update notifications");
   return res.json();
 };
+
+// ==================== CHAT SERVICES ====================
+export const getConversation = async (otherUserId: number | string) => {
+  const res = await fetch(`${BASE_URL}/chat/messages/${otherUserId}`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Failed to fetch messages: ${res.status} ${errorBody}`);
+  }
+  return res.json();
+};
+
+export const getConversationsList = async () => {
+  const res = await fetch(`${BASE_URL}/chat/conversations`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch conversations");
+  return res.json();
+};
+
+export const sendMessageToApi = async (receiverId: number | string, content: string, type: string = 'text', propertyId?: number | string) => {
+  const res = await fetch(`${BASE_URL}/chat/send`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ receiver_id: receiverId, content, type, property_id: propertyId }),
+  });
+  if (!res.ok) throw new Error("Failed to send message");
+  return res.json();
+};
+

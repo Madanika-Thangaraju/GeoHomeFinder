@@ -1,31 +1,83 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import React, { useState } from 'react';
-import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getProfile, tenantProperties } from '@/src/services/service';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { COLORS, LAYOUT } from '../../src/constants/theme';
-import { PROPERTIES } from '../../src/data/properties';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
-const PROPERTY_MATCHES = PROPERTIES.map(p => ({
-    id: p.id.toString(),
-    price: p.price,
-    period: '/mo',
-    address: p.address,
-    image: p.image.uri || 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80',
-    beds: p.bedrooms,
-    baths: p.bathrooms,
-    sqft: p.size,
-    match: p.match,
-    status: p.status || 'Available',
-    isTopMatch: Number(p.match.replace(/\D/g, '')) > 90,
-}));
+const HOUSE_IMAGES = [
+    'https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&q=80&w=800',
+    'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&q=80&w=800',
+    'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=800',
+];
 
 export default function SearchResultsScreen() {
+    const router = useRouter();
     const [searchMode, setSearchMode] = useState('pin');
-    // router is now imported directly from expo-router
+    const [properties, setProperties] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchProperties();
+        }, [])
+    );
+
+    const fetchProperties = async () => {
+        try {
+            setLoading(true);
+            const prefsString = await AsyncStorage.getItem('rentalPreferences');
+            let filters = null;
+            if (prefsString) {
+                const prefs = JSON.parse(prefsString);
+
+                // Map frontend 'Buy' to backend 'Sell'
+                let listingType = prefs.purpose;
+                if (listingType === 'Buy') listingType = 'Sell';
+
+                filters = {
+                    minPrice: prefs.minBudget,
+                    maxPrice: prefs.maxBudget,
+                    propertyType: prefs.selectedPropertyType,
+                    bedrooms: prefs.selectedConfig?.split(' ')[0],
+                    listingType: listingType
+                };
+
+                // If PG is selected as property type, ensure we also filter by listingType PG
+                if (prefs.selectedPropertyType === 'PG/Co-living') {
+                    filters.listingType = 'PG/Co-living';
+                }
+            }
+
+            // Fetch from API
+            const data = await tenantProperties(undefined, undefined, undefined, filters);
+
+            const formatted = (data || []).map((prop: any, index: number) => ({
+                id: prop.id?.toString(),
+                price: prop.price ? `$${prop.price}` : (prop.rent_price ? `$${prop.rent_price}` : 'Price on request'),
+                period: prop.rent_price ? '/mo' : '',
+                address: prop.address || 'No address provided',
+                image: prop.images?.[0]?.image_url || HOUSE_IMAGES[index % HOUSE_IMAGES.length],
+                beds: prop.bedrooms || prop.bhk || 0,
+                baths: prop.bathrooms || 0,
+                sqft: prop.sqft ? `${prop.sqft} sqft` : 'N/A',
+                match: `${Math.floor(Math.random() * 20) + 80}%`, // Simulated match score
+                status: prop.status || 'Available',
+                isTopMatch: Math.random() > 0.7,
+            }));
+
+            setProperties(formatted);
+        } catch (error) {
+            console.error('Failed to load properties in SearchResults', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const MapMarker = ({ price, top, left, active }: { price: string, top: number, left: number, active?: boolean }) => (
         <View style={[styles.mapMarker, { top, left }, active && styles.mapMarkerActive]}>
@@ -37,6 +89,15 @@ export default function SearchResultsScreen() {
             {active && <View style={styles.markerArrow} />}
         </View>
     );
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white }]}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={{ marginTop: 12, color: COLORS.textSecondary }}>Finding matches...</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -97,17 +158,15 @@ export default function SearchResultsScreen() {
                 <View style={styles.dragHandle} />
 
                 <View style={styles.resultsHeader}>
-                    <Text style={styles.resultsTitle}>{PROPERTY_MATCHES.length} Homes Matched</Text>
+                    <Text style={styles.resultsTitle}>{properties.length} {properties.length === 1 ? 'Home' : 'Homes'} Matched</Text>
                     <TouchableOpacity onPress={() => router.push('/dashboard/rental-preferences')}>
                         <Text style={styles.editFiltersText}>Edit Filters</Text>
                     </TouchableOpacity>
                 </View>
 
-
-
                 {/* Property List */}
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
-                    {PROPERTY_MATCHES.map((item) => (
+                    {properties.map((item) => (
                         <View key={item.id} style={styles.card}>
                             <View style={styles.imageContainer}>
                                 <Image source={{ uri: item.image }} style={styles.cardImage} />

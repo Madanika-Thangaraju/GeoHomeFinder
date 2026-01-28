@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,7 +17,7 @@ import {
   View,
 } from "react-native";
 import { COLORS, LAYOUT, SPACING } from "../../src/constants/theme";
-import { addProperty } from "../../src/services/service";
+import { addProperty, getProperty, updateProperty } from "../../src/services/service";
 
 // Replace with your Google Places API Key
 const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
@@ -55,6 +55,8 @@ interface LocationCoords {
 
 export default function AddPropertyScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams();
+  const isEditMode = !!id;
 
   const [propertyTitle, setPropertyTitle] = useState("");
   const [propertyDescription, setPropertyDescription] = useState("");
@@ -135,6 +137,50 @@ export default function AddPropertyScreen() {
 
     return () => clearTimeout(delayDebounceFn);
   }, [address]);
+
+  // ---------- FETCH PROPERTY FOR EDIT MODE ----------
+  useEffect(() => {
+    if (isEditMode) {
+      fetchPropertyForEdit();
+    }
+  }, [id]);
+
+  const fetchPropertyForEdit = async () => {
+    try {
+      setLoading(true);
+      const data = await getProperty(id as string);
+      if (data) {
+        setPropertyTitle(data.title || "");
+        setPropertyDescription(data.description || "");
+        setListingTypes(data.listing_type ? [data.listing_type] : []);
+        setPropertyTypes(data.property_type ? [data.property_type] : []);
+        setAddress(data.address || "");
+        setBhk(data.bhk ? data.bhk.toString() : "");
+        setBedrooms(data.bedrooms ? data.bedrooms.toString() : "");
+        setBathrooms(data.bathrooms ? data.bathrooms.toString() : "");
+        setSqft(data.sqft ? data.sqft.toString() : "");
+        setRentPrice(data.rent_price ? data.rent_price.toString() : "");
+        setDeposit(data.deposit ? data.deposit.toString() : "");
+        setFurnishing(data.furnishing || "");
+        setPrice(data.price ? data.price.toString() : "");
+
+        if (data.latitude && data.longitude) {
+          const coords = { lat: data.latitude, lng: data.longitude };
+          setLocationCoords(coords);
+          const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${coords.lat},${coords.lng}&zoom=15&size=600x300&markers=color:red%7C${coords.lat},${coords.lng}&key=${GOOGLE_PLACES_API_KEY}`;
+          setMapUrl(staticMapUrl);
+        }
+
+        if (data.images && Array.isArray(data.images)) {
+          setImages(data.images.map((img: any) => img.image_url));
+        }
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to fetch property details");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const searchPlaces = async (input: string) => {
     try {
@@ -246,7 +292,7 @@ export default function AddPropertyScreen() {
 
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaType.Images,
         quality: 0.8,
         allowsEditing: true,
         aspect: [4, 3],
@@ -278,7 +324,7 @@ export default function AddPropertyScreen() {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaType.Images,
         allowsMultipleSelection: true,
         quality: 0.8,
         selectionLimit: 10,
@@ -526,10 +572,17 @@ export default function AddPropertyScreen() {
 
     try {
       setLoading(true);
-      await addProperty(payload);
-      Alert.alert("Success", "Property added successfully", [
-        { text: "OK", onPress: () => router.back() }
-      ]);
+      if (isEditMode) {
+        await updateProperty(id as string, payload);
+        Alert.alert("Success", "Property updated successfully", [
+          { text: "OK", onPress: () => router.back() }
+        ]);
+      } else {
+        await addProperty(payload);
+        Alert.alert("Success", "Property added successfully", [
+          { text: "OK", onPress: () => router.back() }
+        ]);
+      }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Something went wrong");
     } finally {
@@ -544,7 +597,7 @@ export default function AddPropertyScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={20} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>List Property</Text>
+        <Text style={styles.headerTitle}>{isEditMode ? "Edit Property" : "List Property"}</Text>
         <View style={{ width: 20 }} />
       </View>
 

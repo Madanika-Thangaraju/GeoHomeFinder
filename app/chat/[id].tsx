@@ -1,59 +1,155 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Dimensions, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Dimensions, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { io, Socket } from 'socket.io-client';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 import { PROPERTIES } from '../../src/data/properties';
+import { getConversation, sendMessageToApi } from '../../src/services/service';
+import { getUser } from '../../src/utils/auth';
 
 const { width } = Dimensions.get('window');
-
-// Mock data for the specific conversation from the screenshot
-const MOCK_MESSAGES = [
-    {
-        id: '1',
-        text: "Hello! Thanks for your interest in the RS Puram property.",
-        isUser: false,
-        time: '10:30 AM',
-        type: 'text'
-    },
-    {
-        id: '2',
-        image: 'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=800&q=80',
-        isUser: false,
-        time: '10:31 AM',
-        type: 'image'
-    },
-    {
-        id: '3',
-        text: "Here is a recent photo of the living area. It gets plenty of morning sunlight.",
-        isUser: false,
-        time: '10:31 AM',
-        type: 'text'
-    },
-    {
-        id: '4',
-        text: "That looks spacious! Is the 3BHK in Peelamedu still available for viewing tomorrow?",
-        isUser: true,
-        time: '10:45 AM',
-        type: 'text',
-        isRead: true,
-    },
-    {
-        id: '5',
-        text: "Yes, it is available. I can schedule a visit for 11 AM.",
-        isUser: false,
-        time: '10:48 AM',
-        type: 'ai-suggestion', // Special type for AI suggested response
-    }
-];
+const SOCKET_URL = "http://192.168.29.40:3000";
 
 export default function ChatScreen() {
-    const { id } = useLocalSearchParams();
+    const { id, otherUserId, otherUserName } = useLocalSearchParams();
     const router = useRouter();
     const [message, setMessage] = useState('');
+    const [messages, setMessages] = useState<any[]>([]);
+    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [isOpponentTyping, setIsOpponentTyping] = useState(false);
+    const socketRef = useRef<Socket | null>(null);
+    const scrollViewRef = useRef<ScrollView>(null);
 
     // Find property/owner details based on ID
     const property = PROPERTIES.find(p => p.id === Number(id)) || PROPERTIES[0];
+
+    // Dynamic receiver determination
+    const [receiverId, setReceiverId] = useState<number | string>(0);
+    const [displayInfo, setDisplayInfo] = useState({ name: '', image: null as any });
+
+    useEffect(() => {
+        const setup = async () => {
+            const user = await getUser();
+            setCurrentUser(user);
+
+            if (user) {
+                // Determine who we are talking to
+                let rId: number | string;
+                let dName: string;
+                let dImage: any;
+
+                if (user.role === 'owner' && otherUserId) {
+                    // Owner is replying to a specific tenant
+                    rId = otherUserId as string;
+                    dName = (otherUserName as string) || 'Tenant';
+                    dImage = null; // We might not have tenant avatar in mock data
+                } else {
+                    // Tenant is contacting owner
+                    rId = property.owner.id || 2;
+                    dName = property.owner.name;
+                    dImage = property.owner.image;
+                }
+
+                setReceiverId(rId);
+                setDisplayInfo({ name: dName, image: dImage });
+
+                // Initialize Socket
+                const socket = io(SOCKET_URL);
+                socketRef.current = socket;
+
+                socket.emit('join_room', user.id);
+
+                socket.on('receive_message', (data) => {
+                    if (data.sender_id.toString() === rId.toString()) {
+                        setMessages(prev => [...prev, {
+                            id: Date.now().toString(),
+                            content: data.content,
+                            sender_type: data.sender_type,
+                            created_at: new Date().toISOString()
+                        }]);
+                    }
+                });
+
+                socket.on('display_typing', (data) => {
+                    if (data.sender_id.toString() === rId.toString()) {
+                        setIsOpponentTyping(data.isTyping);
+                    }
+                });
+
+                // Fetch conversation history
+                try {
+                    console.log(`[Chat] Fetching history for receiver: ${rId}`);
+                    const history = await getConversation(rId);
+                    setMessages(history);
+                } catch (error: any) {
+                    console.error("❌ Failed to fetch chat history:", error.message);
+                } finally {
+                    setLoading(false);
+                }
+            }
+        };
+
+        setup();
+
+        return () => {
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+            }
+        };
+    }, [id, otherUserId]);
+
+    const handleSend = async () => {
+        if (!message.trim() || !currentUser) return;
+
+        const content = message.trim();
+        setMessage('');
+
+        const newMessage = {
+            id: 'temp-' + Date.now(),
+            content: content,
+            sender_type: currentUser.role || 'tenant',
+            created_at: new Date().toISOString(),
+            is_user: true
+        };
+
+        setMessages(prev => [...prev, newMessage]);
+
+        try {
+            // Save to DB (passing property_id)
+            await sendMessageToApi(receiverId, content, 'text', property.id);
+
+            // Emit via socket
+            if (socketRef.current) {
+                socketRef.current.emit('send_message', {
+                    sender_id: currentUser.id,
+                    receiver_id: receiverId,
+                    content: content,
+                    type: 'text',
+                    sender_type: currentUser.role || 'tenant'
+                });
+            }
+        } catch (error) {
+            console.error("Failed to send message:", error);
+        }
+    };
+
+    const handleTyping = (text: string) => {
+        setMessage(text);
+        if (socketRef.current && currentUser) {
+            socketRef.current.emit('typing', {
+                sender_id: currentUser.id,
+                receiver_id: receiverId,
+                isTyping: text.length > 0
+            });
+        }
+    };
+
+    const formatTime = (dateStr: string) => {
+        const date = new Date(dateStr);
+        return isNaN(date.getTime()) ? 'Just now' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
 
     return (
         <View style={styles.container}>
@@ -65,12 +161,20 @@ export default function ChatScreen() {
                     </TouchableOpacity>
 
                     <View style={styles.ownerInfo}>
-                        <Image source={property.owner.image} style={styles.avatar} />
+                        {displayInfo.image ? (
+                            <Image source={displayInfo.image} style={styles.avatar} />
+                        ) : (
+                            <View style={[styles.avatar, { backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' }]}>
+                                <Text style={{ color: COLORS.primary, fontWeight: 'bold' }}>{displayInfo.name.charAt(0)}</Text>
+                            </View>
+                        )}
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.ownerName} numberOfLines={1}>{property.owner.name} (Owner)</Text>
+                            <Text style={styles.ownerName} numberOfLines={1}>{displayInfo.name} ({currentUser?.role === 'owner' ? 'Tenant' : 'Owner'})</Text>
                             <View style={styles.statusRow}>
-                                <View style={styles.statusDot} />
-                                <Text style={styles.statusText} numberOfLines={1}>Active now • {property.type} in {property.address.split(',')[0]}...</Text>
+                                <View style={[styles.statusDot, { backgroundColor: isOpponentTyping ? COLORS.primary : COLORS.success }]} />
+                                <Text style={styles.statusText} numberOfLines={1}>
+                                    {isOpponentTyping ? 'Typing...' : 'Active now'} • {property.type} in {property.address.split(',')[0]}...
+                                </Text>
                             </View>
                         </View>
                     </View>
@@ -94,82 +198,82 @@ export default function ChatScreen() {
             </View>
 
             {/* Messages Area */}
-            <ScrollView
-                style={styles.messagesContainer}
-                contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: SPACING.m }}
-            >
-                <View style={styles.dateSeparator}>
-                    <Text style={styles.dateText}>Today</Text>
+            {loading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={COLORS.primary} />
+                    <Text style={{ marginTop: 10, color: COLORS.textSecondary }}>Loading conversation...</Text>
                 </View>
-
-                {MOCK_MESSAGES.map((msg) => (
-                    <View key={msg.id} style={[
-                        styles.messageRow,
-                        msg.isUser ? styles.userRow : styles.ownerRow
-                    ]}>
-                        {!msg.isUser && msg.type !== 'ai-suggestion' && (
-                            <Image source={property.owner.image} style={styles.msgAvatar} />
-                        )}
-
-                        {msg.type === 'text' && (
-                            <View>
-                                <View style={[
-                                    styles.bubble,
-                                    msg.isUser ? styles.userBubble : styles.ownerBubble
-                                ]}>
-                                    <Text style={[
-                                        styles.msgText,
-                                        msg.isUser ? styles.userMsgText : styles.ownerMsgText
-                                    ]}>{msg.text}</Text>
-                                </View>
-                                <View style={[styles.timeRow, msg.isUser ? { justifyContent: 'flex-end' } : { marginLeft: 0 }]}>
-                                    <Text style={styles.timeText}>{msg.time}</Text>
-                                    {msg.isRead && (
-                                        <Ionicons name="checkmark-done" size={12} color={COLORS.primary} style={{ marginLeft: 4 }} />
-                                    )}
-                                </View>
-                            </View>
-                        )}
-
-                        {msg.type === 'image' && (
-                            <View>
-                                <View style={styles.imageBubble}>
-                                    <Image source={{ uri: msg.image }} style={styles.msgImage} resizeMode="cover" />
-                                </View>
-                                <Text style={styles.timeText}>{msg.time}</Text>
-                            </View>
-                        )}
-
-                        {/* Special AI Suggestion Card */}
-                        {msg.type === 'ai-suggestion' && (
-                            <View style={{ width: '100%' }}>
-                                <View style={styles.aiCard}>
-                                    <View style={styles.aiBar} />
-                                    <View style={styles.aiContent}>
-                                        <Text style={styles.aiLabel}>AI SUGGESTION</Text>
-                                        <Text style={styles.aiText}>{msg.text}</Text>
-                                    </View>
-                                </View>
-                                <Text style={[styles.timeText, { marginLeft: 40 }]}>{msg.time}</Text>
-
-                                {/* Typing Indicator for AI flow */}
-                                <View style={styles.typingRow}>
-                                    <Image source={property.owner.image} style={styles.msgAvatar} />
-                                    <View style={styles.typingBubble}>
-                                        <View style={styles.typingDot} />
-                                        <View style={[styles.typingDot, { opacity: 0.6 }]} />
-                                        <View style={[styles.typingDot, { opacity: 0.3 }]} />
-                                    </View>
-                                </View>
-                            </View>
-                        )}
+            ) : (
+                <ScrollView
+                    ref={scrollViewRef}
+                    style={styles.messagesContainer}
+                    contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: SPACING.m }}
+                    onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+                >
+                    <View style={styles.dateSeparator}>
+                        <Text style={styles.dateText}>Today</Text>
                     </View>
-                ))}
-            </ScrollView>
+
+                    {messages.map((msg, index) => {
+                        const isUserMsg = msg.is_user || (msg.sender_type === (currentUser?.role || 'tenant'));
+                        return (
+                            <View key={msg.id || index} style={[
+                                styles.messageRow,
+                                isUserMsg ? styles.userRow : styles.ownerRow
+                            ]}>
+                                {!isUserMsg && (
+                                    displayInfo.image ? (
+                                        <Image source={displayInfo.image} style={styles.msgAvatar} />
+                                    ) : (
+                                        <View style={[styles.msgAvatar, { backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' }]}>
+                                            <Text style={{ fontSize: 10, color: COLORS.primary, fontWeight: 'bold' }}>{displayInfo.name.charAt(0)}</Text>
+                                        </View>
+                                    )
+                                )}
+
+                                <View>
+                                    <View style={[
+                                        styles.bubble,
+                                        isUserMsg ? styles.userBubble : styles.ownerBubble
+                                    ]}>
+                                        <Text style={[
+                                            styles.msgText,
+                                            isUserMsg ? styles.userMsgText : styles.ownerMsgText
+                                        ]}>{msg.content}</Text>
+                                    </View>
+                                    <View style={[styles.timeRow, isUserMsg ? { justifyContent: 'flex-end' } : { marginLeft: 0 }]}>
+                                        <Text style={styles.timeText}>{formatTime(msg.created_at)}</Text>
+                                        {isUserMsg && msg.is_read && (
+                                            <Ionicons name="checkmark-done" size={12} color={COLORS.primary} style={{ marginLeft: 4 }} />
+                                        )}
+                                    </View>
+                                </View>
+                            </View>
+                        );
+                    })}
+
+                    {isOpponentTyping && (
+                        <View style={styles.typingRow}>
+                            {displayInfo.image ? (
+                                <Image source={displayInfo.image} style={styles.msgAvatar} />
+                            ) : (
+                                <View style={[styles.msgAvatar, { backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' }]}>
+                                    <Text style={{ fontSize: 10, color: COLORS.primary, fontWeight: 'bold' }}>{displayInfo.name.charAt(0)}</Text>
+                                </View>
+                            )}
+                            <View style={styles.typingBubble}>
+                                <View style={styles.typingDot} />
+                                <View style={[styles.typingDot, { opacity: 0.6 }]} />
+                                <View style={[styles.typingDot, { opacity: 0.3 }]} />
+                            </View>
+                        </View>
+                    )}
+                </ScrollView>
+            )}
 
             {/* Input Area */}
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-                {/* Quick Actions */}
+                {/* Quick Actions - Mock for now */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActionsScroll} contentContainerStyle={{ paddingHorizontal: SPACING.m }}>
                     <TouchableOpacity style={styles.quickActionChip}>
                         <Ionicons name="calendar-outline" size={16} color={COLORS.textPrimary} />
@@ -196,14 +300,14 @@ export default function ChatScreen() {
                             placeholder="Type a message..."
                             placeholderTextColor={COLORS.textSecondary}
                             value={message}
-                            onChangeText={setMessage}
+                            onChangeText={handleTyping}
                         />
                         <TouchableOpacity>
                             <Ionicons name="happy-outline" size={24} color={COLORS.textSecondary} />
                         </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity style={styles.sendBtn}>
+                    <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
                         <Ionicons name="send" size={20} color={COLORS.white} style={{ marginLeft: 2 }} />
                     </TouchableOpacity>
                 </View>
@@ -211,6 +315,7 @@ export default function ChatScreen() {
         </View>
     );
 }
+
 
 const styles = StyleSheet.create({
     container: {

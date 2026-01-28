@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
-import { getOwnerProperties, getProfile } from '../../src/services/service';
+import { deleteProperty, getOwnerProperties, getProfile } from '../../src/services/service';
 import { decodeToken, getToken, getUser } from '../../src/utils/auth';
 
 export default function MyListings() {
@@ -79,6 +79,32 @@ export default function MyListings() {
         }
     };
 
+    const handleDeleteListing = async (id: string, title: string) => {
+        Alert.alert(
+            "Delete Listing",
+            `Are you sure you want to delete "${title}"? This action cannot be undone.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            setLoading(true);
+                            await deleteProperty(id);
+                            Alert.alert("Success", "Listing deleted successfully");
+                            loadListings();
+                        } catch (error: any) {
+                            Alert.alert("Error", error.message || "Failed to delete listing");
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const renderItem = ({ item }: { item: any }) => (
         <View style={styles.card}>
             <View style={{ position: 'relative' }}>
@@ -100,10 +126,19 @@ export default function MyListings() {
                         <Text style={styles.statText}>{item.views} Views</Text>
                     </View>
                     <View style={styles.actions}>
-                        <TouchableOpacity style={styles.actionBtn}>
+                        <TouchableOpacity
+                            style={styles.actionBtn}
+                            onPress={() => router.push({
+                                pathname: '/dashboard/add-property',
+                                params: { id: item.id }
+                            })}
+                        >
                             <Ionicons name="pencil-outline" size={18} color={COLORS.primary} />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.actionBtn}>
+                        <TouchableOpacity
+                            style={styles.actionBtn}
+                            onPress={() => handleDeleteListing(item.id, item.title)}
+                        >
                             <Ionicons name="trash-outline" size={18} color={COLORS.error} />
                         </TouchableOpacity>
                     </View>

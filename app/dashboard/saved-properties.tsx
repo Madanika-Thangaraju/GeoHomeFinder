@@ -100,8 +100,8 @@ export default function SavedPropertiesScreen() {
                             <View style={styles.cardContent}>
                                 <Text style={styles.price}>{item.price}</Text>
                                 <Text style={styles.title}>{item.title}</Text>
-                                <Text style={styles.location}>{item.location}</Text>
-                                <Text style={styles.specs}>{item.specs}</Text>
+                                <Text style={styles.location}>{item.address}</Text>
+                                <Text style={styles.specs}>{item.type} • {item.bedrooms} Bed • {item.bathrooms} Bath</Text>
 
                                 <View style={styles.cardActions}>
                                     <TouchableOpacity style={styles.detailsBtn}>

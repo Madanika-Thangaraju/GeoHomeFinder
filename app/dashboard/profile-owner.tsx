@@ -64,6 +64,8 @@ export default function OwnerProfile() {
   const [showPredictions, setShowPredictions] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showPersonalDetails, setShowPersonalDetails] = useState(false);
+  const [showHelpSupport, setShowHelpSupport] = useState(false);
+  const [showTermsPolicies, setShowTermsPolicies] = useState(false);
   const [editData, setEditData] = useState({ ...userData });
 
   // ---------- LOAD PROFILE ----------
@@ -327,7 +329,13 @@ export default function OwnerProfile() {
         <MenuItem
           icon="help-circle"
           title="Help & Support"
-          onPress={() => Alert.alert("Help & Support")}
+          onPress={() => setShowHelpSupport(true)}
+        />
+
+        <MenuItem
+          icon="document-text"
+          title="Terms & Policies"
+          onPress={() => setShowTermsPolicies(true)}
         />
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -336,7 +344,7 @@ export default function OwnerProfile() {
       </ScrollView>
 
       {/* Personal Details Modal */}
-      <Modal animationType="slide" transparent={true} visible={showPersonalDetails} onRequestClose={() => setShowPersonalDetails(false)}>
+      <Modal animationType="fade" transparent={true} visible={showPersonalDetails} onRequestClose={() => setShowPersonalDetails(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -379,7 +387,7 @@ export default function OwnerProfile() {
       </Modal>
 
       {/* Edit Profile Modal */}
-      <Modal animationType="slide" transparent={true} visible={showEditProfile} onRequestClose={() => setShowEditProfile(false)}>
+      <Modal animationType="fade" transparent={true} visible={showEditProfile} onRequestClose={() => setShowEditProfile(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -469,6 +477,57 @@ export default function OwnerProfile() {
           </View>
         </View>
       </Modal>
+
+      {/* Help & Support Modal */}
+      <Modal animationType="fade" transparent={true} visible={showHelpSupport} onRequestClose={() => setShowHelpSupport(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Help & Support</Text>
+              <TouchableOpacity onPress={() => setShowHelpSupport(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.sectionHeaderInner}>App Details</Text>
+              <Text style={styles.infoText}>GeoHome v1.0.0</Text>
+              <Text style={styles.infoText}>Build: 2025.12.25</Text>
+              <Text style={[styles.sectionHeaderInner, { marginTop: 20 }]}>Instructions</Text>
+              <View style={styles.instructionItem}>
+                <Ionicons name="search-outline" size={20} color={COLORS.primary} />
+                <Text style={styles.instructionText}>Use the search bar on the home screen to find properties in your area.</Text>
+              </View>
+              <View style={styles.instructionItem}>
+                <Ionicons name="heart-outline" size={20} color={COLORS.primary} />
+                <Text style={styles.instructionText}>Save properties you like by clicking the heart icon on any listing.</Text>
+              </View>
+              <TouchableOpacity style={[styles.editProfileBtnLarge, { backgroundColor: '#F1F5F9', marginTop: 24 }]}>
+                <Text style={[styles.editProfileText, { color: COLORS.textPrimary }]}>Contact Support</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Terms & Policies Modal */}
+      <Modal animationType="fade" transparent={true} visible={showTermsPolicies} onRequestClose={() => setShowTermsPolicies(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Terms & Policies</Text>
+              <TouchableOpacity onPress={() => setShowTermsPolicies(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.sectionHeaderInner}>Privacy Policy</Text>
+              <Text style={styles.legalText}>Your privacy is important to us. GeoHome collects only the information necessary to provide you with property search and listing services.</Text>
+              <Text style={[styles.sectionHeaderInner, { marginTop: 20 }]}>Terms of Service</Text>
+              <Text style={styles.legalText}>By using GeoHome, you agree to provide accurate information and interact respectfully with other users.</Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -546,8 +605,8 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   logoutText: { color: COLORS.error, fontWeight: "bold", fontSize: 16 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 400 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: COLORS.white, borderRadius: 28, padding: 24, width: '85%', maxHeight: '80%', ...LAYOUT.shadow, elevation: 10 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.textPrimary },
   detailRow: { marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingBottom: 12 },
@@ -562,6 +621,11 @@ const styles = StyleSheet.create({
   inputField: { flex: 1, fontSize: 16, color: COLORS.textPrimary, paddingVertical: 0 },
   saveBtnLarge: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 24 },
   saveBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 16 },
+  sectionHeaderInner: { fontSize: 14, fontWeight: 'bold', color: COLORS.textSecondary, marginBottom: 8, textTransform: 'uppercase' },
+  infoText: { fontSize: 14, color: COLORS.textPrimary, marginBottom: 4 },
+  instructionItem: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12 },
+  instructionText: { fontSize: 14, color: COLORS.textPrimary, flex: 1, lineHeight: 20 },
+  legalText: { fontSize: 14, color: COLORS.textPrimary, lineHeight: 22, marginBottom: 16 },
   predictionsModalList: {
     backgroundColor: COLORS.white,
     borderRadius: 12,

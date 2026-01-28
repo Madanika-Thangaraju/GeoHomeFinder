@@ -87,25 +87,12 @@ export default function OwnerDashboard() {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Header */}
-                <View style={styles.header}>
+                {/* Simplified Header */}
+                <View style={[styles.header, { marginBottom: 24 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         <TouchableOpacity onPress={() => router.back()}>
                             <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
                         </TouchableOpacity>
-                        <View style={styles.locationRow}>
-                            <View style={styles.locationIconBg}>
-                                <Ionicons
-                                    name="location-sharp"
-                                    size={16}
-                                    color={COLORS.primary}
-                                />
-                            </View>
-                            <View>
-                                <Text style={styles.brandTitle}>GEOHOME</Text>
-                                <Text style={styles.locationText}>{userProfile?.location || 'Coimbatore, IN'}</Text>
-                            </View>
-                        </View>
                     </View>
 
                     {/* Right Side Actions */}
@@ -120,20 +107,16 @@ export default function OwnerDashboard() {
                                 <Text style={styles.badgeText}>3</Text>
                             </View>
                         </TouchableOpacity>
-
-                        <TouchableOpacity onPress={() => router.push('/dashboard/profile-owner')}>
-                            {userProfile?.image ? (
-                                <RNImage source={{ uri: userProfile.image }} style={styles.profileImage} />
-                            ) : (
-                                <Ionicons name="person-circle-outline" size={40} color={COLORS.textSecondary} />
-                            )}
-                        </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Greeting */}
-                <Animated.View entering={FadeInDown.delay(100)}>
-                    <Text style={styles.greeting}>Welcome back, {userProfile?.name?.split(' ')[0] || 'Owner'}</Text>
+                <Animated.View entering={FadeInDown.delay(100)} style={{ marginBottom: 12 }}>
+                    <Text style={styles.greeting}>Welcome back,</Text>
+                    <Text style={styles.usernameTextGreeting}>{userProfile?.name || 'Owner'}</Text>
+                </Animated.View>
+
+                {/* Main Action Title */}
+                <Animated.View entering={FadeInDown.delay(200)}>
                     <Text style={styles.mainTitle}>
                         Manage your{'\n'}Real Estate Portfolio
                     </Text>
@@ -256,11 +239,14 @@ export default function OwnerDashboard() {
 
             {/* Bottom Navigation */}
             <View style={styles.bottomNav}>
-                <TouchableOpacity style={styles.navItem}>
-                    <View style={styles.navIconActive}>
-                        <Ionicons name="grid" size={22} color={COLORS.primary} />
-                    </View>
-                    <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/dashboard/owner')}>
+                    <Ionicons name="grid" size={22} color={COLORS.textSecondary} />
+                    <Text style={styles.navLabel}>Home</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/dashboard/owner-chats')}>
+                    <Ionicons name="chatbubbles" size={22} color={COLORS.textSecondary} />
+                    <Text style={styles.navLabel}>Chats</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.navItem} onPress={() => router.push('/dashboard/my-listings')}>
@@ -268,9 +254,10 @@ export default function OwnerDashboard() {
                     <Text style={styles.navLabel}>Listings</Text>
                 </TouchableOpacity>
 
-
-
-
+                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/dashboard/profile-owner')}>
+                    <Ionicons name="person" size={22} color={COLORS.textSecondary} />
+                    <Text style={styles.navLabel}>Profile</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
@@ -345,11 +332,18 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     greeting: {
-        fontSize: 16,
-        color: COLORS.textSecondary,
+        fontSize: 18,
+        color: '#000000',
+        fontWeight: '500',
+    },
+    usernameTextGreeting: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#000000',
+        marginTop: 2,
     },
     mainTitle: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: 'bold',
         color: '#60A5FA',
         marginBottom: SPACING.l,

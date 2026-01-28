@@ -16,23 +16,23 @@ const PROPERTY_TYPES = [
     { id: 'apartment', label: 'Apartment', icon: 'business' },
     { id: 'house', label: 'House', icon: 'home' },
     { id: 'villa', label: 'Villa', icon: 'business' }, // finding a villa icon, 'business' is generic, maybe 'home' or similar
-    { id: 'townhouse', label: 'Townhouse', icon: 'business' },
+    { id: 'PG/Co-living', label: 'PG/Co-living', icon: 'business' },
 ];
 
 const CONFIGURATIONS = ['1 BHK', '2 BHK', '3 BHK', '4+ BHK'];
 
 export default function RentalPreferencesScreen() {
     const router = useRouter();
-    const [purpose, setPurpose] = useState<'Rent' | 'Buy'>('Rent');
-    const [minBudget, setMinBudget] = useState('1200');
-    const [maxBudget, setMaxBudget] = useState('3500');
-    const [selectedPropertyType, setSelectedPropertyType] = useState('apartment');
-    const [selectedConfig, setSelectedConfig] = useState('2 BHK');
+    const [purpose, setPurpose] = useState<'Rent' | 'Buy' | ''>('');
+    const [minBudget, setMinBudget] = useState('');
+    const [maxBudget, setMaxBudget] = useState('');
+    const [selectedPropertyType, setSelectedPropertyType] = useState('');
+    const [selectedConfig, setSelectedConfig] = useState('');
 
     const handleReset = () => {
-        setPurpose('Rent');
-        setMinBudget('0');
-        setMaxBudget('0');
+        setPurpose('');
+        setMinBudget('');
+        setMaxBudget('');
         setSelectedPropertyType('');
         setSelectedConfig('');
     };
@@ -75,19 +75,10 @@ export default function RentalPreferencesScreen() {
                 <View style={styles.section}>
                     <View style={styles.budgetHeader}>
                         <Text style={styles.sectionLabel}>MONTHLY BUDGET</Text>
-                        <Text style={styles.budgetRangeText}>${minBudget} - ${maxBudget}</Text>
+                        <Text style={styles.budgetRangeText}>${minBudget || '0'} - ${maxBudget || '0'}</Text>
                     </View>
 
                     <View style={styles.budgetCard}>
-                        <View style={styles.sliderContainer}>
-                            {/* Placeholder for Slider Visual */}
-                            <View style={styles.sliderTrack}>
-                                <View style={styles.sliderRange} />
-                                <View style={[styles.sliderThumb, { left: '20%' }]} />
-                                <View style={[styles.sliderThumb, { left: '70%' }]} />
-                            </View>
-                        </View>
-
                         <View style={styles.budgetInputs}>
                             <View style={styles.inputContainer}>
                                 <Text style={styles.inputLabel}>Min</Text>
@@ -181,7 +172,7 @@ export default function RentalPreferencesScreen() {
                             };
                             await AsyncStorage.setItem('rentalPreferences', JSON.stringify(prefs));
                             console.log("RentalPreferences: Saved preferences:", prefs);
-                            router.back(); // Go back to dashboard which will re-fetch
+                            router.push('/dashboard/search-results'); // Go to dedicated results page
                         } catch (error) {
                             console.error("Failed to save rental preferences", error);
                         }

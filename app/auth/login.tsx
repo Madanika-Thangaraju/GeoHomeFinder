@@ -128,7 +128,10 @@ export default function LoginScreen() {
                 [
                     {
                         text: 'Continue',
-                        onPress: () => router.push('/auth/role-selection'),
+                        onPress: () => router.push({
+                            pathname: '/auth/role-selection',
+                            params: { fromLogin: 'true' }
+                        }),
                     },
                 ]
             );

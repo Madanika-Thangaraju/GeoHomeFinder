@@ -14,6 +14,7 @@ export const PROPERTIES = [
         status: 'Sold Out',
         image: { uri: 'https://images.unsplash.com/photo-1600596542815-e32c11e3b38c?auto=format&fit=crop&w=800&q=80' },
         owner: {
+            id: 1,
             name: 'Sarah Miller',
             image: { uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80' },
             rating: 4.9,
@@ -42,6 +43,7 @@ export const PROPERTIES = [
         status: 'Available',
         image: { uri: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=400&q=80' },
         owner: {
+            id: 2,
             name: 'John Doe',
             image: { uri: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80' },
             rating: 4.5,
@@ -69,6 +71,7 @@ export const PROPERTIES = [
         status: 'Available',
         image: { uri: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=400&q=80' },
         owner: {
+            id: 3,
             name: 'Emily Davis',
             image: { uri: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=200&q=80' },
             rating: 4.8,
@@ -96,6 +99,7 @@ export const PROPERTIES = [
         status: 'Available',
         image: { uri: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=400&q=80' },
         owner: {
+            id: 4,
             name: 'Michael Brown',
             image: { uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80' },
             rating: 4.7,
@@ -109,3 +113,4 @@ export const PROPERTIES = [
         ]
     },
 ];
+
