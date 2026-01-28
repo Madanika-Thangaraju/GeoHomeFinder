@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
-import { getProfile, updateProfile } from '../../src/services/service';
+import { getLikedPropertiesApi, getProfile, getRecentlyViewedApi, getSavedPropertiesApi, updateProfile } from '../../src/services/service';
 
 const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
 
@@ -49,32 +49,47 @@ export default function ProfileScreen() {
     const [isSearching, setIsSearching] = useState(false);
 
     const [editData, setEditData] = useState({ ...userData });
+    const [likedProperties, setLikedProperties] = useState<any[]>([]);
+    const [savedProperties, setSavedProperties] = useState<any[]>([]);
+    const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    // Load Profile
-    useEffect(() => {
-        loadProfile();
-    }, []);
-
-    const loadProfile = async () => {
+    const loadProfileData = async () => {
         try {
-            const data = await getProfile();
+            setLoading(true);
+            const [profile, liked, saved, viewed] = await Promise.all([
+                getProfile(),
+                getLikedPropertiesApi(),
+                getSavedPropertiesApi(),
+                getRecentlyViewedApi()
+            ]);
+
             const mappedData = {
-                name: data.name || '',
-                email: data.email || '',
-                phone: data.phone || '',
-                location: data.location || 'Coimbatore, Tamil Nadu',
-                latitude: data.latitude || null,
-                longitude: data.longitude || null,
-                image: data.image || null,
-                memberSince: data.created_at ? new Date(data.created_at).toDateString() : '',
+                name: profile.name || '',
+                email: profile.email || '',
+                phone: profile.phone || '',
+                location: profile.location || 'Coimbatore, Tamil Nadu',
+                latitude: profile.latitude || null,
+                longitude: profile.longitude || null,
+                image: profile.image || null,
+                memberSince: profile.created_at ? new Date(profile.created_at).toDateString() : '',
                 role: 'Tenant'
             };
             setUserData(mappedData);
             setEditData(mappedData);
+            setLikedProperties(liked || []);
+            setSavedProperties(saved || []);
+            setRecentlyViewed(viewed || []);
         } catch (error) {
-            console.error('Failed to load profile', error);
+            console.error('Failed to load profile data', error);
+        } finally {
+            setLoading(false);
         }
     };
+
+    useEffect(() => {
+        loadProfileData();
+    }, []);
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -271,8 +286,8 @@ export default function ProfileScreen() {
 
                 {/* Stats Row */}
                 <View style={styles.statsRow}>
-                    <StatItem count="8" label="Saved" icon="heart" color="#EF4444" />
-                    <StatItem count="42" label="Viewed" icon="eye" color="#3B82F6" />
+                    <StatItem count={likedProperties.length.toString()} label="Liked" icon="heart" color="#EF4444" />
+                    <StatItem count={recentlyViewed.length.toString()} label="Viewed" icon="eye" color="#3B82F6" />
                     <StatItem count="2" label="Applied" icon="briefcase" color="#F59E0B" />
                 </View>
 
@@ -283,8 +298,9 @@ export default function ProfileScreen() {
                         icon="bookmark"
                         color="#3B82F6"
                         bg="#EFF6FF"
-                        count="3"
-                        label="Saved Searches"
+                        count={savedProperties.length.toString()}
+                        label="Saved Properties"
+                        onPress={() => router.push('/dashboard/saved-list')}
                     />
                     <PropertyToolCard
                         icon="notifications"
@@ -304,16 +320,16 @@ export default function ProfileScreen() {
                 </View>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentList}>
-                    <RecentlyViewedItem
-                        image="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=400&q=80"
-                        title="3BHK Apartment"
-                        location="RS Puram, Coimbatore"
-                    />
-                    <RecentlyViewedItem
-                        image="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=400&q=80"
-                        title="2BHK Spacious"
-                        location="Peelamedu, Coimbatore"
-                    />
+                    {recentlyViewed.length > 0 ? recentlyViewed.map((prop) => (
+                        <RecentlyViewedItem
+                            key={prop.id}
+                            image={prop.image_url || "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=400&q=80"}
+                            title={prop.title}
+                            location={prop.address}
+                        />
+                    )) : (
+                        <Text style={{ marginLeft: 20, color: COLORS.textSecondary, fontStyle: 'italic' }}>No recently viewed properties</Text>
+                    )}
                 </ScrollView>
 
                 {/* Settings & Support */}
@@ -546,9 +562,9 @@ export default function ProfileScreen() {
                     <Ionicons name="home-outline" size={24} color={COLORS.textSecondary} />
                     <Text style={styles.navText}>Home</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/dashboard/saved-properties')}>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.push('/dashboard/liked-properties')}>
                     <Ionicons name="heart-outline" size={24} color={COLORS.textSecondary} />
-                    <Text style={styles.navText}>Saved</Text>
+                    <Text style={styles.navText}>Liked</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navItem}>
                     <Ionicons name="person" size={24} color={COLORS.primary} />

@@ -60,26 +60,14 @@ export default function PropertyDetail() {
             setLoading(true);
             const data = await getProperty(idString);
             if (data) {
-                // Map API data to UI structure if needed, or use directly
+                // The data from service.ts is already mapped by mapProperty in the backend
                 setProperty({
                     ...data,
-                    // Fallback to static props if missing in API
-                    title: data.title || property.title,
-                    price: data.rentPrice ? `₹${data.rentPrice}` : (data.price ? `₹${data.price}` : property.price),
-                    address: data.address || property.address,
-                    description: data.description || property.description,
-                    bedrooms: data.bedrooms || property.bedrooms,
-                    bathrooms: data.bathrooms || property.bathrooms,
-                    size: data.sqft ? `${data.sqft} sqft` : property.size,
-                    image: data.images && data.images.length > 0 ? { uri: data.images[0] } : (data.image_url ? { uri: data.image_url } : property.image),
-                    owner: {
-                        ...property.owner,
-                        name: data.owner_name || (data.user?.name) || property.owner.name,
-                        image: data.owner_image ? { uri: data.owner_image } : property.owner.image,
-                        phone: data.owner_phone || (data.user?.phone) || property.owner.phone,
-                    },
-                    latitude: data.latitude,
-                    longitude: data.longitude
+                    // data.image is already { uri: '...' }
+                    // data.owner is already an object with name, image: { uri: '...' }, etc.
+                    latitude: data.location?.lat || parseFloat(data.latitude) || 11.0168,
+                    longitude: data.location?.lng || parseFloat(data.longitude) || 76.9558,
+                    match: data.match || `${Math.floor(Math.random() * 20) + 80}% Fit`
                 });
             }
         } catch (error) {
@@ -195,9 +183,6 @@ export default function PropertyDetail() {
                             <Text style={styles.priceLabel}>MONTHLY RENT</Text>
                             <Text style={styles.priceValue}>{property.price}</Text>
                         </View>
-                        <TouchableOpacity style={styles.breakdownBtn}>
-                            <Text style={styles.breakdownText}>View Breakdown</Text>
-                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.divider} />
@@ -255,7 +240,7 @@ export default function PropertyDetail() {
                             <Image
                                 source={{
                                     uri: property.latitude && property.longitude ?
-                                        `https://maps.googleapis.com/maps/api/staticmap?center=${property.latitude},${property.longitude}&zoom=15&size=600x300&markers=color:red%7C${property.latitude},${property.longitude}&key=${GOOGLE_PLACES_API_KEY}` :
+                                        `https://maps.googleapis.com/maps/api/staticmap?center=${property.latitude},${property.longitude}&zoom=16&size=600x300&markers=color:red%7C${property.latitude},${property.longitude}&key=${GOOGLE_PLACES_API_KEY}` :
                                         'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=800&q=80'
                                 }}
                                 style={styles.mapImage}
@@ -288,7 +273,17 @@ export default function PropertyDetail() {
                             </View>
                         </View>
 
-                        <TouchableOpacity style={styles.chatOwnerBtn} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: idString } })}>
+                        <TouchableOpacity
+                            style={styles.chatOwnerBtn}
+                            onPress={() => router.push({
+                                pathname: '/chat/[id]',
+                                params: {
+                                    id: idString,
+                                    otherUserId: property.owner?.id,
+                                    otherUserName: property.owner?.name
+                                }
+                            })}
+                        >
                             <Ionicons name="chatbubble-ellipses" size={20} color={COLORS.white} />
                             <Text style={styles.chatOwnerText}>Chat with Owner</Text>
                         </TouchableOpacity>

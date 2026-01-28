@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+    Dimensions,
     ScrollView,
     StyleSheet,
     Text,
@@ -12,6 +13,8 @@ import {
 } from 'react-native';
 import { COLORS, FONTS, LAYOUT, SPACING } from '../../src/constants/theme';
 
+const CONFIGURATIONS = ['1 BHK', '2 BHK', '3 BHK', '4+ BHK'];
+
 const PROPERTY_TYPES = [
     { id: 'apartment', label: 'Apartment', icon: 'business' },
     { id: 'house', label: 'House', icon: 'home' },
@@ -19,7 +22,8 @@ const PROPERTY_TYPES = [
     { id: 'PG/Co-living', label: 'PG/Co-living', icon: 'business' },
 ];
 
-const CONFIGURATIONS = ['1 BHK', '2 BHK', '3 BHK', '4+ BHK'];
+const { width } = Dimensions.get('window');
+const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
 
 export default function RentalPreferencesScreen() {
     const router = useRouter();
@@ -29,12 +33,73 @@ export default function RentalPreferencesScreen() {
     const [selectedPropertyType, setSelectedPropertyType] = useState('');
     const [selectedConfig, setSelectedConfig] = useState('');
 
+    // New Location State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [predictions, setPredictions] = useState<any[]>([]);
+    const [showPredictions, setShowPredictions] = useState(false);
+    const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
+
     const handleReset = () => {
         setPurpose('');
         setMinBudget('');
         setMaxBudget('');
         setSelectedPropertyType('');
         setSelectedConfig('');
+        setSearchQuery('');
+        setSelectedLocation(null);
+    };
+
+    // fetch predictions
+    useEffect(() => {
+        const fetchPredictions = async () => {
+            if (searchQuery.length < 3 || selectedLocation?.address === searchQuery) {
+                setPredictions([]);
+                setShowPredictions(false);
+                return;
+            }
+            try {
+                const response = await fetch(
+                    `https://places.googleapis.com/v1/places:autocomplete`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+                        },
+                        body: JSON.stringify({
+                            input: searchQuery,
+                        }),
+                    }
+                );
+                const data = await response.json();
+                setPredictions(data.suggestions || []);
+                setShowPredictions(true);
+            } catch (e) {
+                console.error("Predictions error", e);
+            }
+        };
+        const timer = setTimeout(fetchPredictions, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const selectPlace = async (prediction: any) => {
+        const placeText = prediction.placePrediction?.text?.text || "";
+        setSearchQuery(placeText);
+        setShowPredictions(false);
+        try {
+            const placeId = prediction.placePrediction?.placeId;
+            const response = await fetch(`https://places.googleapis.com/v1/places/${placeId}?fields=location&key=${GOOGLE_PLACES_API_KEY}`);
+            const data = await response.json();
+            if (data.location) {
+                setSelectedLocation({
+                    lat: parseFloat(data.location.latitude),
+                    lng: parseFloat(data.location.longitude),
+                    address: placeText
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching place details:", error);
+        }
     };
 
     return (
@@ -51,6 +116,34 @@ export default function RentalPreferencesScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
+                {/* Location Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>LOCATION</Text>
+                    <View style={styles.searchBar}>
+                        <Ionicons name="search" size={18} color={COLORS.textSecondary} />
+                        <TextInput
+                            style={styles.searchInput}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            placeholder="Search location..."
+                            placeholderTextColor={COLORS.textSecondary}
+                        />
+                    </View>
+                    {showPredictions && predictions.length > 0 && (
+                        <View style={styles.predictionsContainer}>
+                            {predictions.map((item, idx) => (
+                                <TouchableOpacity key={idx} style={styles.predictionItem} onPress={() => selectPlace(item)}>
+                                    <Ionicons name="location-outline" size={18} color={COLORS.textSecondary} style={{ marginRight: 10 }} />
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.predictionMain} numberOfLines={1}>{item.placePrediction?.structuredFormat?.mainText?.text}</Text>
+                                        <Text style={styles.predictionSub} numberOfLines={1}>{item.placePrediction?.structuredFormat?.secondaryText?.text}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
+                </View>
 
                 {/* Purpose Section */}
                 <View style={styles.section}>
@@ -75,7 +168,7 @@ export default function RentalPreferencesScreen() {
                 <View style={styles.section}>
                     <View style={styles.budgetHeader}>
                         <Text style={styles.sectionLabel}>MONTHLY BUDGET</Text>
-                        <Text style={styles.budgetRangeText}>${minBudget || '0'} - ${maxBudget || '0'}</Text>
+                        <Text style={styles.budgetRangeText}>₹{minBudget || '0'} - ₹{maxBudget || '0'}</Text>
                     </View>
 
                     <View style={styles.budgetCard}>
@@ -83,7 +176,7 @@ export default function RentalPreferencesScreen() {
                             <View style={styles.inputContainer}>
                                 <Text style={styles.inputLabel}>Min</Text>
                                 <View style={styles.inputWrapper}>
-                                    <Text style={styles.currencySymbol}>$</Text>
+                                    <Text style={styles.currencySymbol}>₹</Text>
                                     <TextInput
                                         style={styles.input}
                                         value={minBudget}
@@ -96,7 +189,7 @@ export default function RentalPreferencesScreen() {
                             <View style={styles.inputContainer}>
                                 <Text style={styles.inputLabel}>Max</Text>
                                 <View style={styles.inputWrapper}>
-                                    <Text style={styles.currencySymbol}>$</Text>
+                                    <Text style={styles.currencySymbol}>₹</Text>
                                     <TextInput
                                         style={styles.input}
                                         value={maxBudget}
@@ -169,19 +262,21 @@ export default function RentalPreferencesScreen() {
                                 maxBudget,
                                 selectedPropertyType,
                                 selectedConfig,
+                                location: selectedLocation
                             };
                             await AsyncStorage.setItem('rentalPreferences', JSON.stringify(prefs));
                             console.log("RentalPreferences: Saved preferences:", prefs);
-                            router.push('/dashboard/search-results'); // Go to dedicated results page
+                            router.push('/dashboard/search-results');
                         } catch (error) {
                             console.error("Failed to save rental preferences", error);
                         }
                     }}
                 >
-                    <Text style={styles.saveButtonText}>Save Preferences</Text>
+                    <Text style={styles.saveButtonText}>Apply Filters</Text>
                     <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
                 </TouchableOpacity>
 
+                <View style={{ height: 40 }} />
             </ScrollView>
         </View>
     );
@@ -429,5 +524,50 @@ const styles = StyleSheet.create({
         color: COLORS.white,
         fontSize: FONTS.sizes.body,
         fontWeight: 'bold',
+    },
+    searchBar: {
+        flexDirection: 'row',
+        backgroundColor: COLORS.white,
+        padding: 12,
+        borderRadius: 14,
+        alignItems: 'center',
+        ...LAYOUT.shadow,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 10,
+        fontWeight: '600',
+        fontSize: 14,
+        color: COLORS.textPrimary,
+    },
+    predictionsContainer: {
+        backgroundColor: COLORS.white,
+        marginTop: 5,
+        borderRadius: 12,
+        padding: 8,
+        maxHeight: 250,
+        ...LAYOUT.shadow,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    predictionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    predictionMain: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.textPrimary,
+    },
+    predictionSub: {
+        fontSize: 12,
+        color: COLORS.textSecondary,
+        marginTop: 2,
     },
 });

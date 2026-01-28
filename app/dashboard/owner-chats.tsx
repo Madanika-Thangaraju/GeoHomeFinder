@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 import { getConversationsList } from '../../src/services/service';
 import { getUser } from '../../src/utils/auth';
@@ -31,18 +31,18 @@ export default function OwnerChatsScreen() {
     );
 
     const renderItem = ({ item }: { item: any }) => {
-        // Determine display name (if owner, show tenant; if tenant, show owner - but this is owner dashboard)
-        const displayName = item.tenant_name;
+        // Use the aliases returned by the model: other_user_name and other_user_id
+        const displayName = item.other_user_name || item.tenant_name || 'User';
 
         return (
             <TouchableOpacity
                 style={styles.chatCard}
                 onPress={() => router.push({
-                    pathname: `/chat/${item.property_id}`,
+                    pathname: `/chat/${String(item.property_id)}`,
                     params: {
                         chatId: item.id,
-                        otherUserId: item.tenant_id,
-                        otherUserName: item.tenant_name
+                        otherUserId: item.other_user_id || item.tenant_id,
+                        otherUserName: item.other_user_name || item.tenant_name
                     }
                 })}
             >
@@ -57,7 +57,7 @@ export default function OwnerChatsScreen() {
                     <View style={styles.chatHeader}>
                         <Text style={styles.nameText} numberOfLines={1}>{displayName}</Text>
                         <Text style={styles.timeText}>
-                            {item.last_message_time ? new Date(item.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            {item.last_message_at ? new Date(item.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                         </Text>
                     </View>
 

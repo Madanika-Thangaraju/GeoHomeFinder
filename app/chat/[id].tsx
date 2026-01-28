@@ -4,12 +4,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
-import { PROPERTIES } from '../../src/data/properties';
-import { getConversation, sendMessageToApi } from '../../src/services/service';
+import { getConversation, getProperty, sendMessageToApi } from '../../src/services/service';
 import { getUser } from '../../src/utils/auth';
 
 const { width } = Dimensions.get('window');
-const SOCKET_URL = "http://192.168.29.40:3000";
+const SOCKET_URL = "http://172.30.51.246:3000";
 
 export default function ChatScreen() {
     const { id, otherUserId, otherUserName } = useLocalSearchParams();
@@ -22,81 +21,73 @@ export default function ChatScreen() {
     const socketRef = useRef<Socket | null>(null);
     const scrollViewRef = useRef<ScrollView>(null);
 
-    // Find property/owner details based on ID
-    const property = PROPERTIES.find(p => p.id === Number(id)) || PROPERTIES[0];
-
     // Dynamic receiver determination
     const [receiverId, setReceiverId] = useState<number | string>(0);
     const [displayInfo, setDisplayInfo] = useState({ name: '', image: null as any });
+    const [chatProperty, setChatProperty] = useState<any>(null);
 
     useEffect(() => {
         const setup = async () => {
             const user = await getUser();
             setCurrentUser(user);
 
-            if (user) {
-                // Determine who we are talking to
-                let rId: number | string;
-                let dName: string;
-                let dImage: any;
+            try {
+                // Fetch property and owner details
+                const propData = await getProperty(id as string);
+                setChatProperty(propData);
 
-                if (user.role === 'owner' && otherUserId) {
-                    // Owner is replying to a specific tenant
-                    rId = otherUserId as string;
-                    dName = (otherUserName as string) || 'Tenant';
-                    dImage = null; // We might not have tenant avatar in mock data
-                } else {
-                    // Tenant is contacting owner
-                    rId = property.owner.id || 2;
-                    dName = property.owner.name;
-                    dImage = property.owner.image;
-                }
+                if (user && propData) {
+                    let rId: number | string;
+                    let dName: string;
+                    let dImage: any;
 
-                setReceiverId(rId);
-                setDisplayInfo({ name: dName, image: dImage });
-
-                // Initialize Socket
-                const socket = io(SOCKET_URL);
-                socketRef.current = socket;
-
-                socket.emit('join_room', user.id);
-
-                socket.on('receive_message', (data) => {
-                    if (data.sender_id.toString() === rId.toString()) {
-                        setMessages(prev => [...prev, {
-                            id: Date.now().toString(),
-                            content: data.content,
-                            sender_type: data.sender_type,
-                            created_at: new Date().toISOString()
-                        }]);
+                    // If we have otherUserId from params (navigated from owner dashboard), use it
+                    if (otherUserId) {
+                        rId = String(otherUserId);
+                        dName = (otherUserName as string) || 'User';
+                        dImage = null;
+                    } else {
+                        // Navigated from property details as tenant
+                        rId = propData.owner?.id || propData.owner_id || 2;
+                        dName = propData.owner?.name || propData.owner_name || 'Owner';
+                        dImage = propData.owner?.image || (propData.owner_image ? { uri: propData.owner_image } : null);
                     }
-                });
 
-                socket.on('display_typing', (data) => {
-                    if (data.sender_id.toString() === rId.toString()) {
-                        setIsOpponentTyping(data.isTyping);
-                    }
-                });
+                    setReceiverId(rId);
+                    setDisplayInfo({ name: dName, image: dImage });
 
-                // Fetch conversation history
-                try {
-                    console.log(`[Chat] Fetching history for receiver: ${rId}`);
-                    const history = await getConversation(rId);
+                    // Initialize Socket
+                    const socket = io(SOCKET_URL);
+                    socketRef.current = socket;
+                    socket.emit('join_room', String(user.id));
+
+                    socket.on('receive_message', (data) => {
+                        if (String(data.sender_id) === String(rId)) {
+                            setMessages(prev => [...prev, {
+                                id: Date.now().toString(),
+                                content: data.content,
+                                sender_id: data.sender_id,
+                                sender_type: data.sender_type,
+                                created_at: new Date().toISOString()
+                            }]);
+                        }
+                    });
+
+                    // Fetch history
+                    const history = await getConversation(rId, propData?.id);
                     setMessages(history);
-                } catch (error: any) {
-                    console.error("❌ Failed to fetch chat history:", error.message);
-                } finally {
-                    setLoading(false);
                 }
+            } catch (error: any) {
+                console.error("❌ Failed to setup chat:", error.message);
+            } finally {
+                setLoading(false);
             }
         };
 
         setup();
 
         return () => {
-            if (socketRef.current) {
-                socketRef.current.disconnect();
-            }
+            if (socketRef.current) socketRef.current.disconnect();
         };
     }, [id, otherUserId]);
 
@@ -109,6 +100,7 @@ export default function ChatScreen() {
         const newMessage = {
             id: 'temp-' + Date.now(),
             content: content,
+            sender_id: currentUser.id,
             sender_type: currentUser.role || 'tenant',
             created_at: new Date().toISOString(),
             is_user: true
@@ -118,7 +110,7 @@ export default function ChatScreen() {
 
         try {
             // Save to DB (passing property_id)
-            await sendMessageToApi(receiverId, content, 'text', property.id);
+            await sendMessageToApi(receiverId, content, 'text', chatProperty?.id || id);
 
             // Emit via socket
             if (socketRef.current) {
@@ -161,7 +153,7 @@ export default function ChatScreen() {
                     </TouchableOpacity>
 
                     <View style={styles.ownerInfo}>
-                        {displayInfo.image ? (
+                        {displayInfo.image && (typeof displayInfo.image === 'object' && displayInfo.image.uri) ? (
                             <Image source={displayInfo.image} style={styles.avatar} />
                         ) : (
                             <View style={[styles.avatar, { backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' }]}>
@@ -169,18 +161,18 @@ export default function ChatScreen() {
                             </View>
                         )}
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.ownerName} numberOfLines={1}>{displayInfo.name} ({currentUser?.role === 'owner' ? 'Tenant' : 'Owner'})</Text>
+                            <Text style={styles.ownerName} numberOfLines={1}>{displayInfo.name}</Text>
                             <View style={styles.statusRow}>
                                 <View style={[styles.statusDot, { backgroundColor: isOpponentTyping ? COLORS.primary : COLORS.success }]} />
                                 <Text style={styles.statusText} numberOfLines={1}>
-                                    {isOpponentTyping ? 'Typing...' : 'Active now'} • {property.type} in {property.address.split(',')[0]}...
+                                    {isOpponentTyping ? 'Typing...' : 'Active now'} • {chatProperty?.property_type || chatProperty?.type} in {chatProperty?.address?.split(',')[0]}...
                                 </Text>
                             </View>
                         </View>
                     </View>
 
                     <View style={{ flexDirection: 'row', gap: 16 }}>
-                        <TouchableOpacity onPress={() => router.push('/dashboard/saved-properties')}>
+                        <TouchableOpacity onPress={() => router.push('/dashboard/liked-properties')}>
                             <Ionicons name="heart-outline" size={24} color={COLORS.textPrimary} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => router.push('/dashboard/profile-tenant')}>
@@ -192,7 +184,7 @@ export default function ChatScreen() {
                 {/* Context Bar */}
                 <View style={styles.contextBar}>
                     <Ionicons name="home-outline" size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
-                    <Text style={styles.contextText}>Interested in <Text style={{ fontWeight: 'bold' }}>{property.type} @ {property.address.split(',')[0]}</Text></Text>
+                    <Text style={styles.contextText}>Interested in <Text style={{ fontWeight: 'bold' }}>{chatProperty?.property_type || chatProperty?.type} @ {chatProperty?.address?.split(',')[0]}</Text></Text>
                     <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
                 </View>
             </View>
@@ -215,7 +207,7 @@ export default function ChatScreen() {
                     </View>
 
                     {messages.map((msg, index) => {
-                        const isUserMsg = msg.is_user || (msg.sender_type === (currentUser?.role || 'tenant'));
+                        const isUserMsg = msg.is_user || (String(msg.sender_id) === String(currentUser?.id));
                         return (
                             <View key={msg.id || index} style={[
                                 styles.messageRow,
@@ -243,9 +235,9 @@ export default function ChatScreen() {
                                     </View>
                                     <View style={[styles.timeRow, isUserMsg ? { justifyContent: 'flex-end' } : { marginLeft: 0 }]}>
                                         <Text style={styles.timeText}>{formatTime(msg.created_at)}</Text>
-                                        {isUserMsg && msg.is_read && (
+                                        {isUserMsg && msg.is_read ? (
                                             <Ionicons name="checkmark-done" size={12} color={COLORS.primary} style={{ marginLeft: 4 }} />
-                                        )}
+                                        ) : null}
                                     </View>
                                 </View>
                             </View>

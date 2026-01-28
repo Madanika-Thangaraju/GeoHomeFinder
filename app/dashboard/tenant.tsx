@@ -1,10 +1,12 @@
-import { getProfile, tenantProperties } from '@/src/services/service';
+import { getLikedPropertiesApi, getProfile, getSavedPropertiesApi, likePropertyApi, savePropertyApi, tenantProperties, trackPropertyViewApi } from '@/src/services/service';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Image,
   ScrollView,
@@ -12,11 +14,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  Alert
+  View
 } from 'react-native';
-import MapView, { Circle, Marker } from 'react-native-maps';
-import * as Location from 'expo-location';
+import MapView, { Marker } from 'react-native-maps';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 
 const { width } = Dimensions.get('window');
@@ -51,22 +51,27 @@ export default function TenantDashboard() {
     latitudeDelta: 0.02,
     longitudeDelta: 0.02,
   });
-  const [favorites, setFavorites] = useState<string[]>([]);
+  const [favorites, setFavorites] = useState<number[]>([]);
+  const [savedIds, setSavedIds] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [predictions, setPredictions] = useState<any[]>([]);
   const [showPredictions, setShowPredictions] = useState(false);
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
-    const loadFavorites = async () => {
+    const loadInitialData = async () => {
       try {
-        const saved = await AsyncStorage.getItem('favorites');
-        if (saved) setFavorites(JSON.parse(saved));
+        const [liked, saved] = await Promise.all([
+          getLikedPropertiesApi(),
+          getSavedPropertiesApi()
+        ]);
+        if (liked) setFavorites(liked.map((p: any) => p.id));
+        if (saved) setSavedIds(saved.map((p: any) => p.id));
       } catch (error) {
-        console.error('Failed to load favorites', error);
+        console.error('Failed to load initial likes/saves', error);
       }
     };
-    loadFavorites();
+    loadInitialData();
   }, []);
 
   const fetchProperties = async (lat?: number, lng?: number, rad?: number, ignoreFilters: boolean = false) => {
@@ -94,14 +99,12 @@ export default function TenantDashboard() {
       const targetLng = lng || locationCoords?.lng;
 
       const data = await tenantProperties(targetLat, targetLng, rad, filters);
-      const enrichedData = (data || []).slice(0, 10).map((prop: any, index: number) => {
-        let propertyImage = { uri: prop.images?.[0]?.image_url || HOUSE_IMAGES[index % HOUSE_IMAGES.length] };
+      const enrichedData = (data || []).map((prop: any) => {
         return {
           ...prop,
-          image: propertyImage,
-          status: 'Available',
-          isSoldOut: false,
-          match: `${Math.floor(Math.random() * 20) + 80}% Fit`,
+          // Backend already maps imageUrl to image: { uri: '...' }
+          status: prop.status || (prop.is_available === 0 ? 'Sold Out' : 'Available'),
+          match: prop.match || `${Math.floor(Math.random() * 20) + 80}% Fit`,
         };
       });
       setProperties(enrichedData);
@@ -258,12 +261,41 @@ export default function TenantDashboard() {
     }, [locationCoords, radius])
   );
 
-  const toggleFavorite = async (propertyId: string) => {
-    let updated = [...favorites];
-    if (updated.includes(propertyId)) updated = updated.filter(id => id !== propertyId);
-    else updated.push(propertyId);
-    setFavorites(updated);
-    await AsyncStorage.setItem('favorites', JSON.stringify(updated));
+  const toggleFavorite = async (propertyId: number) => {
+    try {
+      const isLiked = favorites.includes(propertyId);
+      await likePropertyApi(propertyId, !isLiked);
+
+      let updated = [...favorites];
+      if (isLiked) updated = updated.filter(id => id !== propertyId);
+      else updated.push(propertyId);
+      setFavorites(updated);
+    } catch (error) {
+      Alert.alert("Error", "Failed to update like status");
+    }
+  };
+
+  const toggleSave = async (propertyId: number) => {
+    try {
+      const isSaved = savedIds.includes(propertyId);
+      await savePropertyApi(propertyId, !isSaved);
+
+      let updated = [...savedIds];
+      if (isSaved) updated = updated.filter(id => id !== propertyId);
+      else updated.push(propertyId);
+      setSavedIds(updated);
+    } catch (error) {
+      Alert.alert("Error", "Failed to update save status");
+    }
+  };
+
+  const handlePropertyClick = async (propertyId: number) => {
+    try {
+      await trackPropertyViewApi(propertyId);
+    } catch (error) {
+      console.error("Failed to track view", error);
+    }
+    router.push({ pathname: '/property/[id]', params: { id: propertyId } });
   };
 
   const selectPlace = async (prediction: any) => {
@@ -349,18 +381,6 @@ export default function TenantDashboard() {
           region={region}
           onRegionChangeComplete={onRegionChangeComplete}
         >
-          {locationCoords && (
-            <Circle
-              center={{
-                latitude: parseFloat(locationCoords.lat as any) || region.latitude,
-                longitude: parseFloat(locationCoords.lng as any) || region.longitude
-              }}
-              radius={radius * 1000}
-              fillColor="rgba(96, 165, 250, 0.2)"
-              strokeColor="rgba(96, 165, 250, 0.5)"
-            />
-          )}
-
           {properties.map((prop) => {
             const lat = parseFloat(prop.latitude || prop.lat);
             const lng = parseFloat(prop.longitude || prop.lng);
@@ -373,7 +393,7 @@ export default function TenantDashboard() {
                 description={prop.address}
               >
                 <View style={styles.mapPin}>
-                  <Ionicons name="home" size={16} color={COLORS.white} />
+                  <Text style={styles.mapPinText}>{prop.price}</Text>
                 </View>
               </Marker>
             );
@@ -419,16 +439,26 @@ export default function TenantDashboard() {
           )}
           {properties.length > 0 ? (
             properties.map((prop) => (
-              <TouchableOpacity key={prop.id} onPress={() => router.push({ pathname: '/property/[id]', params: { id: prop.id } })}>
+              <TouchableOpacity key={prop.id} onPress={() => handlePropertyClick(prop.id)}>
                 <View style={styles.propertyCard}>
                   <View style={styles.imageWrapper}>
                     <Image source={{ uri: prop.image.uri }} style={styles.cardImage} />
-                    <TouchableOpacity style={styles.likeButton} onPress={(e) => { e.stopPropagation(); toggleFavorite(prop.id); }}>
-                      <Ionicons name={favorites.includes(prop.id) ? 'heart' : 'heart-outline'} size={20} color={favorites.includes(prop.id) ? '#EF4444' : COLORS.textPrimary} />
-                    </TouchableOpacity>
+                    {savedIds.includes(prop.id) && (
+                      <View style={styles.savedTag}>
+                        <Text style={styles.savedTagText}>SAVED</Text>
+                      </View>
+                    )}
+                    <View style={styles.cardActionButtons}>
+                      <TouchableOpacity style={styles.cardActionBtn} onPress={(e) => { e.stopPropagation(); toggleSave(prop.id); }}>
+                        <Ionicons name={savedIds.includes(prop.id) ? 'bookmark' : 'bookmark-outline'} size={18} color={savedIds.includes(prop.id) ? COLORS.primary : COLORS.textPrimary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.cardActionBtn} onPress={(e) => { e.stopPropagation(); toggleFavorite(prop.id); }}>
+                        <Ionicons name={favorites.includes(prop.id) ? 'heart' : 'heart-outline'} size={18} color={favorites.includes(prop.id) ? '#EF4444' : COLORS.textPrimary} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                   <View style={styles.cardContent}>
-                    <Text style={styles.cardPrice}>${prop.price || prop.rent_price}<Text style={styles.cardPeriod}> /mo</Text></Text>
+                    <Text style={styles.cardPrice}>{prop.price || (prop.rent_price ? `₹${prop.rent_price}` : '')}<Text style={styles.cardPeriod}> /mo</Text></Text>
                     <Text style={styles.cardDetails}>{prop.property_type || prop.type} • {prop.bedrooms || prop.bhk} Bed</Text>
                     <Text style={styles.cardAddress}>{prop.address}</Text>
                     <View style={styles.cardFooter}>
@@ -453,9 +483,9 @@ export default function TenantDashboard() {
       </View>
 
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navButton} onPress={() => router.push('/dashboard/saved-properties')}>
+        <TouchableOpacity style={styles.navButton} onPress={() => router.push('/dashboard/liked-properties')}>
           <Ionicons name="heart" size={24} color={COLORS.primary} />
-          <Text style={styles.navLabel}>Favorites</Text>
+          <Text style={styles.navLabel}>Liked</Text>
           {favorites.length > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{favorites.length}</Text></View>}
         </TouchableOpacity>
         <TouchableOpacity style={styles.navButton} onPress={() => router.push('/dashboard/profile-tenant')}>
@@ -479,7 +509,8 @@ const styles = StyleSheet.create({
   predictionMain: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },
   predictionSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
   mapLayer: { height: '50%', width: '100%' },
-  mapPin: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.white },
+  mapPin: { backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 2, borderColor: COLORS.white, ...LAYOUT.shadow },
+  mapPinText: { color: COLORS.white, fontSize: 10, fontWeight: 'bold' },
   zoomControls: { position: 'absolute', right: 16, top: '40%', backgroundColor: COLORS.white, borderRadius: 8, ...LAYOUT.shadow, zIndex: 40 },
   zoomBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   zoomDivider: { height: 1, backgroundColor: '#F1F5F9', width: '80%', alignSelf: 'center' },
@@ -498,7 +529,10 @@ const styles = StyleSheet.create({
   propertyCard: { flexDirection: 'row', backgroundColor: COLORS.white, borderRadius: 16, marginHorizontal: 16, marginBottom: 16, overflow: 'hidden', ...LAYOUT.shadow },
   imageWrapper: { width: 120, height: 120, position: 'relative' },
   cardImage: { width: '100%', height: '100%' },
-  likeButton: { position: 'absolute', top: 8, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255, 255, 255, 0.9)', justifyContent: 'center', alignItems: 'center', ...LAYOUT.shadow },
+  cardActionButtons: { position: 'absolute', top: 8, right: 8, gap: 8 },
+  cardActionBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255, 255, 255, 0.9)', justifyContent: 'center', alignItems: 'center', ...LAYOUT.shadow },
+  savedTag: { position: 'absolute', top: 8, left: 8, backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, zIndex: 10 },
+  savedTagText: { color: COLORS.white, fontSize: 10, fontWeight: '800' },
   cardContent: { flex: 1, padding: 12 },
   cardPrice: { fontSize: 18, fontWeight: '800', color: COLORS.textPrimary },
   cardPeriod: { fontSize: 12, fontWeight: '400', color: COLORS.textSecondary },

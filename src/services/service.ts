@@ -1,7 +1,7 @@
 import { RegisterUserPayload } from "../../src/types/tenant.types";
 import { getToken, removeToken, saveToken, saveUser } from "../utils/auth";
 
-const BASE_URL = "http://192.168.29.40:3000";
+const BASE_URL = "http://172.30.51.246:3000";
 
 // ==================== REGISTER USER ====================
 export const registerUser = async (data: RegisterUserPayload) => {
@@ -315,8 +315,12 @@ export const togglePushNotification = async () => {
 };
 
 // ==================== CHAT SERVICES ====================
-export const getConversation = async (otherUserId: number | string) => {
-  const res = await fetch(`${BASE_URL}/chat/messages/${otherUserId}`, {
+export const getConversation = async (otherUserId: number | string, propertyId?: number | string) => {
+  let url = `${BASE_URL}/chat/messages/${otherUserId}`;
+  if (propertyId) url += `?propertyId=${propertyId}`;
+
+  console.log(`[Chat] Fetching from: ${url}`);
+  const res = await fetch(url, {
     headers: await authHeaders(),
   });
   if (!res.ok) {
@@ -344,3 +348,78 @@ export const sendMessageToApi = async (receiverId: number | string, content: str
   return res.json();
 };
 
+// ==================== LIKES & SAVED ====================
+export const likePropertyApi = async (propertyId: number | string, status: boolean) => {
+  const res = await fetch(`${BASE_URL}/tenants/like`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ propertyId, status }),
+  });
+  if (!res.ok) throw new Error("Failed to update like status");
+  return res.json();
+};
+
+export const getLikedPropertiesApi = async () => {
+  const res = await fetch(`${BASE_URL}/tenants/liked`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch liked properties");
+  const result = await res.json();
+  return result.data;
+};
+
+export const savePropertyApi = async (propertyId: number | string, status: boolean, notes: string = "") => {
+  const res = await fetch(`${BASE_URL}/tenants/save`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ propertyId, status, notes }),
+  });
+  if (!res.ok) throw new Error("Failed to update save status");
+  return res.json();
+};
+
+export const getSavedPropertiesApi = async () => {
+  const res = await fetch(`${BASE_URL}/tenants/saved`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch saved properties");
+  const result = await res.json();
+  return result.data;
+};
+
+export const trackPropertyViewApi = async (propertyId: number | string) => {
+  const res = await fetch(`${BASE_URL}/tenants/view`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ propertyId }),
+  });
+  if (!res.ok) throw new Error("Failed to track view");
+  return res.json();
+};
+
+export const getRecentlyViewedApi = async () => {
+  const res = await fetch(`${BASE_URL}/tenants/viewed`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch recently viewed properties");
+  const result = await res.json();
+  return result.data;
+};
+
+// ==================== NOTIFICATION SERVICES ====================
+export const getNotificationsApi = async () => {
+  const res = await fetch(`${BASE_URL}/notifications`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch notifications");
+  return res.json();
+};
+
+export const markNotificationReadApi = async (id: number | string) => {
+  const res = await fetch(`${BASE_URL}/notifications/${id}/read`, {
+    method: "PUT",
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to mark notification as read");
+  return res.json();
+};

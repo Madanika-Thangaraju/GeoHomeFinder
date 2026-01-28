@@ -1,38 +1,68 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
-
-const MOCK_NOTIFICATIONS = [
-    {
-        id: '1',
-        type: 'like',
-        user: 'John Doe',
-        property: 'Greenfield Heights',
-        time: '2 mins ago',
-        avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=100&q=80'
-    },
-    {
-        id: '2',
-        type: 'like',
-        user: 'Sarah Smith',
-        property: 'City Center Apt',
-        time: '1 hour ago',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80'
-    },
-    {
-        id: '3',
-        type: 'view',
-        user: 'Mike Ross',
-        property: 'Greenfield Heights',
-        time: '3 hours ago',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80'
-    },
-];
+import { getNotificationsApi, markNotificationReadApi } from '../../src/services/service';
 
 export default function NotificationsScreen() {
     const router = useRouter();
+    const [notifications, setNotifications] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchNotifications = async () => {
+        try {
+            const data = await getNotificationsApi();
+            setNotifications(data || []);
+        } catch (error) {
+            console.error("Failed to fetch notifications:", error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchNotifications();
+        }, [])
+    );
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchNotifications();
+    };
+
+    const handleMarkRead = async (id: number | string) => {
+        try {
+            await markNotificationReadApi(id);
+            setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
+        } catch (error) {
+            console.error("Failed to mark read:", error);
+        }
+    };
+
+    const getIconInfo = (type: string) => {
+        switch (type) {
+            case 'like': return { name: 'heart', color: '#EF4444' };
+            case 'save': return { name: 'bookmark', color: COLORS.primary };
+            case 'view': return { name: 'eye', color: COLORS.primary };
+            case 'message': return { name: 'chatbubble', color: '#3B82F6' };
+            default: return { name: 'notifications', color: COLORS.primary };
+        }
+    };
+
+    const formatTime = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diff = now.getTime() - date.getTime();
+        const mins = Math.floor(diff / 60000);
+        if (mins < 60) return `${mins}m ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours}h ago`;
+        return date.toLocaleDateString();
+    };
 
     return (
         <View style={styles.container}>
@@ -44,34 +74,54 @@ export default function NotificationsScreen() {
                 <Text style={styles.headerTitle}>Notifications</Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
-                <Text style={styles.sectionTitle}>Today</Text>
-                {MOCK_NOTIFICATIONS.map((item) => (
-                    <TouchableOpacity key={item.id} style={styles.notificationCard}>
-                        <Image source={{ uri: item.avatar }} style={styles.avatar} />
-                        <View style={styles.notifContent}>
-                            <Text style={styles.notifText}>
-                                <Text style={styles.userName}>{item.user}</Text>
-                                {item.type === 'like' ? ' liked your property ' : ' viewed your property '}
-                                <Text style={styles.propertyName}>{item.property}</Text>
-                            </Text>
-                            <Text style={styles.timeText}>{item.time}</Text>
-                        </View>
-                        <View style={styles.iconContainer}>
-                            <Ionicons
-                                name={item.type === 'like' ? 'heart' : 'eye'}
-                                size={16}
-                                color={item.type === 'like' ? '#EF4444' : COLORS.primary}
-                            />
-                        </View>
-                    </TouchableOpacity>
-                ))}
-
-                <Text style={[styles.sectionTitle, { marginTop: SPACING.xl }]}>Yesterday</Text>
-                <View style={styles.emptyState}>
-                    <Text style={styles.emptyText}>No earlier notifications</Text>
-                </View>
-
+            <ScrollView
+                contentContainerStyle={styles.content}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}
+            >
+                {loading && notifications.length === 0 ? (
+                    <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
+                ) : notifications.length === 0 ? (
+                    <View style={styles.emptyState}>
+                        <Ionicons name="notifications-off-outline" size={48} color="#CBD5E1" />
+                        <Text style={[styles.emptyText, { marginTop: 12 }]}>No notifications yet</Text>
+                    </View>
+                ) : (
+                    <>
+                        <Text style={styles.sectionTitle}>Recent Activity</Text>
+                        {notifications.map((item) => {
+                            const icon = getIconInfo(item.type);
+                            return (
+                                <TouchableOpacity
+                                    key={item.id}
+                                    style={[styles.notificationCard, !item.is_read && { borderLeftWidth: 4, borderLeftColor: COLORS.primary }]}
+                                    onPress={() => handleMarkRead(item.id)}
+                                >
+                                    {item.sender_image ? (
+                                        <Image source={{ uri: item.sender_image }} style={styles.avatar} />
+                                    ) : (
+                                        <View style={[styles.avatar, { backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }]}>
+                                            <Text style={{ fontSize: 18, color: COLORS.primary }}>{item.sender_name?.charAt(0) || '?'}</Text>
+                                        </View>
+                                    )}
+                                    <View style={styles.notifContent}>
+                                        <Text style={styles.notifText}>
+                                            <Text style={styles.userName}>{item.sender_name || "Someone"}</Text>
+                                            {item.type === 'like' && ' liked your property '}
+                                            {item.type === 'save' && ' saved your property '}
+                                            {item.type === 'view' && ' viewed your property '}
+                                            {item.type === 'message' && ' sent you a message '}
+                                            <Text style={styles.propertyName}>{item.property_title}</Text>
+                                        </Text>
+                                        <Text style={styles.timeText}>{formatTime(item.created_at)}</Text>
+                                    </View>
+                                    <View style={styles.iconContainer}>
+                                        <Ionicons name={icon.name as any} size={16} color={icon.color} />
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </>
+                )}
             </ScrollView>
         </View>
     );
