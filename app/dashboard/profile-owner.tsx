@@ -16,7 +16,9 @@ import {
 } from "react-native";
 import { COLORS, LAYOUT, SPACING } from "../../src/constants/theme";
 import {
+  getCallRequestsApi,
   getProfile,
+  getTourRequestsApi,
   togglePushNotification,
   updateProfile,
 } from "../../src/services/service";
@@ -60,6 +62,9 @@ export default function OwnerProfile() {
     role: "Owner",
   });
 
+  const [acceptedTours, setAcceptedTours] = useState<any[]>([]);
+  const [acceptedCalls, setAcceptedCalls] = useState<any[]>([]);
+
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [showPredictions, setShowPredictions] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -101,6 +106,14 @@ export default function OwnerProfile() {
         views: String(data.views || 0),
         rating: String(data.rating || 0),
       });
+
+      const [tours, calls] = await Promise.all([
+        getTourRequestsApi('owner'),
+        getCallRequestsApi('owner')
+      ]);
+
+      if (tours.success) setAcceptedTours(tours.data.filter((r: any) => r.status === 'accepted'));
+      if (calls.success) setAcceptedCalls(calls.data.filter((r: any) => r.status === 'accepted'));
     } catch (err) {
       console.log(err);
       Alert.alert("Error", "Failed to load profile");
@@ -337,6 +350,33 @@ export default function OwnerProfile() {
           title="Terms & Policies"
           onPress={() => setShowTermsPolicies(true)}
         />
+
+        {/* Accepted Interactions */}
+        {(acceptedTours.length > 0 || acceptedCalls.length > 0) && (
+          <View style={styles.acceptedSection}>
+            <Text style={styles.sectionHeaderTitle}>Accepted Requests</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.acceptedScroll}>
+              {acceptedCalls.map((req, idx) => (
+                <View key={`owner-acc-call-${idx}`} style={styles.acceptedCard}>
+                  <Ionicons name="call" size={16} color="#10B981" />
+                  <View>
+                    <Text style={styles.tenantName}>{req.other_name}</Text>
+                    <Text style={styles.contactInfo}>{req.other_phone}</Text>
+                  </View>
+                </View>
+              ))}
+              {acceptedTours.map((req, idx) => (
+                <View key={`owner-acc-tour-${idx}`} style={styles.acceptedCard}>
+                  <Ionicons name="calendar" size={16} color={COLORS.primary} />
+                  <View>
+                    <Text style={styles.tenantName}>{req.other_name}</Text>
+                    <Text style={styles.contactInfo}>{req.tour_date} • {req.tour_time}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out</Text>
@@ -605,6 +645,24 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   logoutText: { color: COLORS.error, fontWeight: "bold", fontSize: 16 },
+  acceptedSection: { marginTop: 20, marginHorizontal: 20 },
+  sectionHeaderTitle: { fontSize: 14, fontWeight: '800', color: COLORS.textSecondary, marginBottom: 12, textTransform: 'uppercase' },
+  acceptedScroll: { gap: 10, paddingBottom: 5 },
+  acceptedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    padding: 12,
+    borderRadius: 14,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    minWidth: 160,
+    ...LAYOUT.shadow,
+    shadowOpacity: 0.05
+  },
+  tenantName: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary },
+  contactInfo: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: COLORS.white, borderRadius: 28, padding: 24, width: '85%', maxHeight: '80%', ...LAYOUT.shadow, elevation: 10 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },

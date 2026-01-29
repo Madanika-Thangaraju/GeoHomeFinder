@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../src/constants/theme';
 import { PROPERTIES } from '../../src/data/properties';
-import { getProperty } from '../../src/services/service';
+import { createCallRequestApi, createTourRequestApi, getCallRequestsApi, getProperty } from '../../src/services/service';
 
 const { width, height } = Dimensions.get('window');
 
@@ -50,10 +50,62 @@ export default function PropertyDetail() {
     const [userTimeInput, setUserTimeInput] = useState('');
     const [userMessage, setUserMessage] = useState('');
     const [isRequesting, setIsRequesting] = useState(false);
+    const [isCalling, setIsCalling] = useState(false);
+    const [callStatus, setCallStatus] = useState<'none' | 'pending' | 'accepted'>('none');
+    const [ownerPhone, setOwnerPhone] = useState('');
 
     React.useEffect(() => {
         fetchPropertyData();
     }, [idString]);
+
+    const checkCallStatus = async (ownerId: number) => {
+        try {
+            const res = await getCallRequestsApi('tenant');
+            if (res.success && Array.isArray(res.data)) {
+                const myRequest = res.data.find((r: any) => r.owner_id === ownerId);
+                if (myRequest) {
+                    setCallStatus(myRequest.status);
+                    if (myRequest.status === 'accepted') {
+                        setOwnerPhone(myRequest.other_phone);
+                    }
+                }
+            }
+        } catch (error) {
+            console.log("Error checking call status", error);
+        }
+    };
+
+    const handleCallRequest = async () => {
+        if (callStatus === 'accepted') {
+            Alert.alert(
+                "Owner Contact Info",
+                `Contact ${property.owner.name} at: ${ownerPhone}`,
+                [{ text: "Call Now", onPress: () => { /* Linking.openURL(`tel:${ownerPhone}`) */ } }, { text: "Close" }]
+            );
+            return;
+        }
+
+        if (callStatus === 'pending') {
+            Alert.alert("Request Pending", "Your call request is still pending approval from the owner.");
+            return;
+        }
+
+        try {
+            setIsCalling(true);
+            await createCallRequestApi(property.owner.id);
+            setCallStatus('pending');
+            Alert.alert(
+                "Call Request Sent!",
+                `Your request to call ${property.owner.name} has been sent. Once accepted, their number will be visible here.`,
+                [{ text: "OK" }]
+            );
+        } catch (error: any) {
+            console.error("Failed to send call request:", error);
+            Alert.alert("Error", error.message || "Failed to send call request. Please try again.");
+        } finally {
+            setIsCalling(false);
+        }
+    };
 
     const fetchPropertyData = async () => {
         try {
@@ -69,6 +121,9 @@ export default function PropertyDetail() {
                     longitude: data.location?.lng || parseFloat(data.longitude) || 76.9558,
                     match: data.match || `${Math.floor(Math.random() * 20) + 80}% Fit`
                 });
+                if (data.owner?.id) {
+                    checkCallStatus(data.owner.id);
+                }
             }
         } catch (error) {
             console.error("Failed to fetch property details:", error);
@@ -89,16 +144,24 @@ export default function PropertyDetail() {
 
     const availableDays = getNext7Days();
 
-    const handleConfirmTour = () => {
+    const handleConfirmTour = async () => {
         if (!userTimeInput.trim()) {
             Alert.alert("Wait", "Please specify a time for your tour.");
             return;
         }
 
-        setIsRequesting(true);
-        // Simulate API call
-        setTimeout(() => {
-            setIsRequesting(false);
+        try {
+            setIsRequesting(true);
+            const tourDate = availableDays[selectedDate].fullDate;
+
+            await createTourRequestApi({
+                owner_id: property.owner.id,
+                property_id: Number(idString),
+                tour_date: tourDate,
+                tour_time: userTimeInput,
+                message: userMessage
+            });
+
             setIsTourModalVisible(false);
             Alert.alert(
                 "Tour Request Sent!",
@@ -110,7 +173,12 @@ export default function PropertyDetail() {
                     }
                 }]
             );
-        }, 1500);
+        } catch (error: any) {
+            console.error("Failed to send tour request:", error);
+            Alert.alert("Error", error.message || "Failed to send tour request. Please try again.");
+        } finally {
+            setIsRequesting(false);
+        }
     };
 
     return (
@@ -146,12 +214,14 @@ export default function PropertyDetail() {
                     </View>
 
                     {/* Centered Video Tour Button */}
-                    <View style={styles.videoTourContainer}>
-                        <TouchableOpacity style={styles.playButton} activeOpacity={0.8}>
-                            <Ionicons name="play" size={24} color={COLORS.white} />
-                        </TouchableOpacity>
-                        <Text style={styles.videoText}>VIDEO TOUR</Text>
-                    </View>
+                    {(property.images?.length > 5) && (
+                        <View style={styles.videoTourContainer}>
+                            <TouchableOpacity style={styles.playButton} activeOpacity={0.8}>
+                                <Ionicons name="play" size={24} color={COLORS.white} />
+                            </TouchableOpacity>
+                            <Text style={styles.videoText}>VIDEO TOUR</Text>
+                        </View>
+                    )}
 
                     {/* Bottom Hero Info */}
                     <View style={styles.heroContent}>
@@ -200,7 +270,7 @@ export default function PropertyDetail() {
                                 <View style={styles.highlightIconBg}>
                                     <Ionicons name="bed" size={20} color={COLORS.primary} />
                                 </View>
-                                <Text style={styles.highlightValue}>{property.bedrooms}</Text>
+                                <Text style={styles.highlightValue}>{property.bedrooms || property.bhk || 0}</Text>
                                 <Text style={styles.highlightLabel}>BEDROOMS</Text>
                             </View>
 
@@ -208,7 +278,7 @@ export default function PropertyDetail() {
                                 <View style={styles.highlightIconBg}>
                                     <Ionicons name="water" size={20} color={COLORS.primary} />
                                 </View>
-                                <Text style={styles.highlightValue}>{property.bathrooms}</Text>
+                                <Text style={styles.highlightValue}>{property.bathrooms || 0}</Text>
                                 <Text style={styles.highlightLabel}>BATHROOMS</Text>
                             </View>
 
@@ -216,9 +286,27 @@ export default function PropertyDetail() {
                                 <View style={styles.highlightIconBg}>
                                     <Ionicons name="resize" size={20} color={COLORS.primary} />
                                 </View>
-                                <Text style={styles.highlightValue} numberOfLines={1}>{property.size}</Text>
-                                <Text style={styles.highlightLabel}>AREA/TYPE</Text>
+                                <Text style={styles.highlightValue} numberOfLines={1}>{property.size || property.sqft || 'N/A'}</Text>
+                                <Text style={styles.highlightLabel}>AREA/SIZE</Text>
                             </View>
+
+                            <View style={styles.highlightCard}>
+                                <View style={styles.highlightIconBg}>
+                                    <Ionicons name="briefcase" size={20} color={COLORS.primary} />
+                                </View>
+                                <Text style={styles.highlightValue} numberOfLines={1}>{property.furnishing || 'N/A'}</Text>
+                                <Text style={styles.highlightLabel}>FURNISHING</Text>
+                            </View>
+
+                            {property.listing_type === 'Rent' && (
+                                <View style={styles.highlightCard}>
+                                    <View style={styles.highlightIconBg}>
+                                        <Ionicons name="wallet" size={20} color={COLORS.primary} />
+                                    </View>
+                                    <Text style={styles.highlightValue} numberOfLines={1}>{property.deposit || 'N/A'}</Text>
+                                    <Text style={styles.highlightLabel}>DEPOSIT</Text>
+                                </View>
+                            )}
                         </ScrollView>
                     </View>
 
@@ -249,9 +337,9 @@ export default function PropertyDetail() {
                                 <View style={styles.mapPin}>
                                     <Ionicons name="location" size={20} color={COLORS.primary} />
                                 </View>
-                                <TouchableOpacity style={styles.exploreBtn}>
+                                {/* <TouchableOpacity style={styles.exploreBtn}>
                                     <Text style={styles.exploreText}>Tap to explore</Text>
-                                </TouchableOpacity>
+                                </TouchableOpacity> */}
                             </View>
                         </View>
                     </View>
@@ -303,9 +391,15 @@ export default function PropertyDetail() {
                     <Text style={styles.requestTourText}>Request Tour</Text>
                     <Ionicons name="calendar-outline" size={18} color={COLORS.white} />
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionCircleBtn, { backgroundColor: '#DCFCE7' }]}>
+                <TouchableOpacity
+                    style={[styles.actionCircleBtn, { backgroundColor: '#DCFCE7' }]}
+                    onPress={handleCallRequest}
+                    disabled={isCalling}
+                >
                     <Ionicons name="call" size={20} color={COLORS.success} />
-                    <Text style={[styles.actionLabel, { color: COLORS.success }]}>CALL</Text>
+                    <Text style={[styles.actionLabel, { color: COLORS.success }]}>
+                        {isCalling ? '...' : callStatus === 'accepted' ? 'CONTACT' : callStatus === 'pending' ? 'PENDING' : 'CALL'}
+                    </Text>
                 </TouchableOpacity>
             </View>
 

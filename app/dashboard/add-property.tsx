@@ -57,10 +57,11 @@ export default function AddPropertyScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const isEditMode = !!id;
+  const isSelectingPlace = React.useRef(false);
 
   const [propertyTitle, setPropertyTitle] = useState("");
   const [propertyDescription, setPropertyDescription] = useState("");
-  const [listingTypes, setListingTypes] = useState<string[]>([]);
+  const [listingTypes, setListingTypes] = useState<string>("");
   const [propertyTypes, setPropertyTypes] = useState<string[]>([]);
   const [address, setAddress] = useState("");
   const [bhk, setBhk] = useState("");
@@ -99,9 +100,7 @@ export default function AddPropertyScreen() {
   });
 
   const toggleListingType = (type: string) => {
-    setListingTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
-    );
+    setListingTypes(type);
     if (errors.listingTypes) {
       setErrors((prev) => ({ ...prev, listingTypes: "" }));
     }
@@ -122,16 +121,17 @@ export default function AddPropertyScreen() {
 
   const hasPlotType = propertyTypes.includes("plot");
   const hasNonPlotType = propertyTypes.some((t) => t !== "plot");
-  const hasRentListing = listingTypes.includes("Rent") || listingTypes.includes("PG/Co-living");
-  const hasSellingListing = listingTypes.includes('Sell');
+  const hasRentListing = listingTypes === "Rent" || listingTypes === "PG/Co-living";
+  const hasSellingListing = listingTypes === "Sell";
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      if (address.length > 2) {
+      if (address.length > 2 && !isSelectingPlace.current) {
         searchPlaces(address);
       } else {
         setPredictions([]);
         setShowPredictions(false);
+        isSelectingPlace.current = false;
       }
     }, 500);
 
@@ -152,7 +152,7 @@ export default function AddPropertyScreen() {
       if (data) {
         setPropertyTitle(data.title || "");
         setPropertyDescription(data.description || "");
-        setListingTypes(data.listing_type ? [data.listing_type] : []);
+        setListingTypes(data.listing_type || "");
         setPropertyTypes(data.property_type ? [data.property_type] : []);
         setAddress(data.address || "");
         setBhk(data.bhk ? data.bhk.toString() : "");
@@ -226,6 +226,7 @@ export default function AddPropertyScreen() {
   };
 
   const selectPlace = async (prediction: PlacePrediction) => {
+    isSelectingPlace.current = true;
     setAddress(prediction.text.text);
     setShowPredictions(false);
     setPredictions([]);
@@ -383,8 +384,8 @@ export default function AddPropertyScreen() {
       isValid = false;
     }
 
-    if (listingTypes.length === 0) {
-      newErrors.listingTypes = "Please select at least one listing type";
+    if (!listingTypes) {
+      newErrors.listingTypes = "Please select a listing type";
       isValid = false;
     }
 
@@ -474,7 +475,7 @@ export default function AddPropertyScreen() {
       }
     }
 
-    if (hasRentListing && hasNonPlotType) {
+    if (hasRentListing) {
       if (!rentPrice.trim()) {
         newErrors.rentPrice = "Rent price is required for rental properties";
         isValid = false;
@@ -506,7 +507,7 @@ export default function AddPropertyScreen() {
       }
     }
 
-    if (hasRentListing && hasNonPlotType) {
+    if (hasRentListing) {
       if (!deposit.trim()) {
         newErrors.deposit = "Deposit amount is required for rental properties";
         isValid = false;
@@ -560,8 +561,8 @@ export default function AddPropertyScreen() {
       bedrooms: hasNonPlotType ? Number(bedrooms) : null,
       bathrooms: hasNonPlotType ? Number(bathrooms) : null,
       sqft: (hasResidentialType || hasPlotType) ? Number(sqft) : null,
-      rentPrice: (hasRentListing && hasNonPlotType) ? Number(rentPrice) : null,
-      deposit: (hasRentListing && hasNonPlotType) ? Number(deposit) : null,
+      rentPrice: hasRentListing ? Number(rentPrice) : null,
+      deposit: hasRentListing ? Number(deposit) : null,
       furnishing: hasNonPlotType ? furnishing : null,
       description: propertyDescription.trim(),
       images: images,
@@ -648,14 +649,14 @@ export default function AddPropertyScreen() {
               key={type}
               style={[
                 styles.segmentBtn,
-                listingTypes.includes(type) && styles.segmentBtnActive,
+                listingTypes === type && styles.segmentBtnActive,
               ]}
               onPress={() => toggleListingType(type)}
             >
               <Text
                 style={[
                   styles.segmentText,
-                  listingTypes.includes(type) && styles.segmentTextActive,
+                  listingTypes === type && styles.segmentTextActive,
                 ]}
               >
                 {type}
@@ -672,7 +673,7 @@ export default function AddPropertyScreen() {
           PROPERTY TYPE <Text style={styles.required}>*</Text>
         </Text>
         <View style={styles.gridContainer}>
-          {PROPERTY_TYPES.map((type) => (
+          {PROPERTY_TYPES.filter(type => !(listingTypes === "PG/Co-living" && type.id === "plot")).map((type) => (
             <TouchableOpacity
               key={type.id}
               style={[
@@ -850,7 +851,7 @@ export default function AddPropertyScreen() {
           </>
         )}
 
-        {hasRentListing && hasNonPlotType && (
+        {hasRentListing && (
           <>
             <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Pricing Details</Text>
 

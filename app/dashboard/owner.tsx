@@ -10,11 +10,11 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 // ... imports
 import { GlassCard } from '@/src/components/shared/GlassCard';
 import { COLORS, LAYOUT, SPACING } from '@/src/constants/theme';
-import { getOwnerProperties, getProfile } from '../../src/services/service';
+import { getCallRequestsApi, getNotificationsApi, getOwnerProperties, getProfile, getTourRequestsApi, updateCallStatusApi, updateTourStatusApi } from '../../src/services/service';
 import { decodeToken, getToken, getUser } from '../../src/utils/auth';
 
 // ... inside component
@@ -22,6 +22,9 @@ export default function OwnerDashboard() {
     const router = useRouter();
     const [listingsCount, setListingsCount] = useState<number | string>('-');
     const [userProfile, setUserProfile] = useState<any>(null);
+    const [tourRequests, setTourRequests] = useState<any[]>([]);
+    const [callRequests, setCallRequests] = useState<any[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     useFocusEffect(
         useCallback(() => {
@@ -47,29 +50,35 @@ export default function OwnerDashboard() {
                     }
 
                     // 3. Fallback to Profile API
-                    if (true) { // Always fetch profile for dynamic data
-                        try {
-                            const profile = await getProfile();
-                            setUserProfile(profile);
-                            if (!userId) {
-                                if (profile?.id) userId = profile.id;
-                                else if (profile?.user?.id) userId = profile.user.id;
-                                else if (profile?.data?.id) userId = profile.data.id;
-                            }
-                        } catch (e) {
-                            console.log("Failed to get profile", e);
+                    try {
+                        const profile = await getProfile();
+                        setUserProfile(profile);
+                        if (!userId) {
+                            if (profile?.id) userId = profile.id;
+                            else if (profile?.user?.id) userId = profile.user.id;
+                            else if (profile?.data?.id) userId = profile.data.id;
                         }
+                    } catch (e) {
+                        console.log("Failed to get profile", e);
                     }
 
                     if (userId) {
-                        const listings = await getOwnerProperties(userId);
-                        if (Array.isArray(listings)) {
-                            setListingsCount(listings.length);
-                        } else {
-                            setListingsCount(0);
+                        const [listings, tours, calls, notifications] = await Promise.all([
+                            getOwnerProperties(userId),
+                            getTourRequestsApi('owner'),
+                            getCallRequestsApi('owner'),
+                            getNotificationsApi()
+                        ]);
+
+                        if (Array.isArray(listings)) setListingsCount(listings.length);
+                        else setListingsCount(0);
+
+                        if (tours.success) setTourRequests(tours.data);
+                        if (calls.success) setCallRequests(calls.data);
+
+                        if (Array.isArray(notifications)) {
+                            setUnreadCount(notifications.filter((n: any) => !n.is_read).length);
                         }
-                    } else {
-                        console.error("CRITICAL: User ID not found via local storage, /users/me, or /owners/profile");
                     }
                 } catch (error) {
                     console.error("Failed to fetch dashboard data", error);
@@ -79,6 +88,25 @@ export default function OwnerDashboard() {
             fetchData();
         }, [])
     );
+
+    const handleInteractionStatus = async (type: 'call' | 'tour', id: number, status: 'accepted' | 'rejected') => {
+        try {
+            if (type === 'call') {
+                await updateCallStatusApi(id, status);
+            } else {
+                await updateTourStatusApi(id, status);
+            }
+            // Refresh counts
+            const [tours, calls] = await Promise.all([
+                getTourRequestsApi('owner'),
+                getCallRequestsApi('owner')
+            ]);
+            if (tours.success) setTourRequests(tours.data);
+            if (calls.success) setCallRequests(calls.data);
+        } catch (error) {
+            console.error("Failed to update status", error);
+        }
+    };
 
 
     return (
@@ -93,6 +121,13 @@ export default function OwnerDashboard() {
                         <TouchableOpacity onPress={() => router.back()}>
                             <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
                         </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.setupProfileHeaderBtn}
+                            onPress={() => router.push('/dashboard/profile-owner')}
+                        >
+                            <Ionicons name="person-circle-outline" size={20} color={COLORS.primary} />
+                            <Text style={styles.setupProfileHeaderText}>Profile Setup</Text>
+                        </TouchableOpacity>
                     </View>
 
                     {/* Right Side Actions */}
@@ -103,9 +138,11 @@ export default function OwnerDashboard() {
                                 size={22}
                                 color={COLORS.textSecondary}
                             />
-                            <View style={styles.badge}>
-                                <Text style={styles.badgeText}>3</Text>
-                            </View>
+                            {unreadCount > 0 && (
+                                <View style={styles.badge}>
+                                    <Text style={styles.badgeText}>{unreadCount}</Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -165,48 +202,66 @@ export default function OwnerDashboard() {
                     </View>
                 </Animated.View>
 
-                {/* Call Request Card */}
-                <Animated.View entering={FadeInRight.delay(300)}>
-                    <View style={styles.callCard}>
-                        <View style={styles.callCardHeader}>
-                            <View style={styles.callIconContainer}>
-                                <Ionicons name="call" size={22} color="#10B981" />
-                            </View>
-
-                            <View style={styles.callInfo}>
-                                <Text style={styles.callTitle}>Call Request from Renter</Text>
-                                <Text style={styles.callSubtitle}>
-                                    Regarding property:{' '}
-                                    <Text style={styles.boldText}>
-                                        Greenfield Avenue, Unit 4B
-                                    </Text>
-                                </Text>
-                            </View>
-
-                            <View style={styles.actionRequiredBadge}>
-                                <Text style={styles.actionRequiredText}>
-                                    Action{'\n'}Required
-                                </Text>
+                {/* Dynamic Call Requests */}
+                {callRequests.filter(r => r.status === 'pending').length > 0 && (
+                    <View style={styles.interactionsSection}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.interactionSectionTitle}>Incoming Call Requests</Text>
+                            <View style={styles.badgeCount}>
+                                <Text style={styles.badgeCountText}>{callRequests.filter(r => r.status === 'pending').length}</Text>
                             </View>
                         </View>
-
-                        <View style={styles.callActions}>
-                            <TouchableOpacity style={styles.viewRequestBtn}>
-                                <Text style={styles.viewRequestText}>View Request</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.callBackBtn}>
-                                <Ionicons
-                                    name="call"
-                                    size={14}
-                                    color={COLORS.white}
-                                    style={{ marginRight: 6 }}
-                                />
-                                <Text style={styles.callBackText}>Call Back</Text>
-                            </TouchableOpacity>
-                        </View>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.interactionsScroll}>
+                            {callRequests.filter(r => r.status === 'pending').map((req, idx) => (
+                                <View key={`owner-call-${idx}`} style={styles.interactionCard}>
+                                    <View style={styles.interactionHeader}>
+                                        <View style={styles.clientAvatarMini}>
+                                            <Text style={styles.avatarTextMini}>{req.other_name.charAt(0)}</Text>
+                                        </View>
+                                        <View>
+                                            <Text style={styles.clientNameMini}>{req.other_name}</Text>
+                                            <Text style={styles.interactionTypeMini}>wants a call</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.interactionActionsMini}>
+                                        <TouchableOpacity
+                                            style={[styles.miniActionBtn, styles.miniDecline]}
+                                            onPress={() => handleInteractionStatus('call', req.id, 'rejected')}
+                                        >
+                                            <Ionicons name="close" size={14} color="#EF4444" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.miniActionBtn, styles.miniAccept]}
+                                            onPress={() => handleInteractionStatus('call', req.id, 'accepted')}
+                                        >
+                                            <Ionicons name="checkmark" size={14} color="#10B981" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))}
+                        </ScrollView>
                     </View>
-                </Animated.View>
+                )}
+
+                {/* Tour Requests Summary */}
+                {tourRequests.filter(r => r.status === 'pending').length > 0 && (
+                    <TouchableOpacity
+                        style={styles.tourSummaryCard}
+                        onPress={() => router.push('/dashboard/tour-requests')}
+                    >
+                        <View style={styles.tourSummaryIconBg}>
+                            <Ionicons name="calendar" size={20} color={COLORS.primary} />
+                            <View style={styles.miniBadge}>
+                                <Text style={styles.miniBadgeText}>{tourRequests.filter(r => r.status === 'pending').length}</Text>
+                            </View>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.tourSummaryTitle}>Pending Tour Requests</Text>
+                            <Text style={styles.tourSummarySub}>{tourRequests.filter(r => r.status === 'pending').length} tenants waiting for response</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                )}
 
                 {/* Stats */}
                 <View style={styles.statsGrid}>
@@ -227,10 +282,10 @@ export default function OwnerDashboard() {
                                 { backgroundColor: 'rgba(56,189,248,0.2)' },
                             ]}
                         >
-                            <Ionicons name="bar-chart" size={24} color="#38BDF8" />
+                            <Ionicons name="eye" size={24} color="#38BDF8" />
                         </View>
-                        <Text style={styles.statsValue}>+14%</Text>
-                        <Text style={styles.statsLabel}>Views this week</Text>
+                        <Text style={styles.statsValue}>{userProfile?.views || '0'}</Text>
+                        <Text style={styles.statsLabel}>Total Views</Text>
                     </GlassCard>
                 </View>
 
@@ -538,5 +593,155 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         borderWidth: 2,
         borderColor: COLORS.white,
+    },
+    setupProfileHeaderBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.primary + '15',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 6,
+    },
+    setupProfileHeaderText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: COLORS.primary,
+    },
+    tourSummaryCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.white,
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        gap: 12,
+    },
+    tourSummaryText: {
+        flex: 1,
+        fontSize: 14,
+        color: COLORS.textPrimary,
+        fontWeight: '600',
+    },
+    interactionsSection: {
+        marginBottom: 24,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+        gap: 8,
+    },
+    interactionSectionTitle: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    badgeCount: {
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 10,
+    },
+    badgeCountText: {
+        color: COLORS.white,
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    interactionsScroll: {
+        gap: 12,
+        paddingRight: 20,
+    },
+    interactionCard: {
+        backgroundColor: COLORS.white,
+        padding: 12,
+        borderRadius: 16,
+        width: 160,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        ...LAYOUT.shadow,
+    },
+    interactionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 12,
+    },
+    clientAvatarMini: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: COLORS.primary + '20',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    avatarTextMini: {
+        color: COLORS.primary,
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+    clientNameMini: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    interactionTypeMini: {
+        fontSize: 10,
+        color: COLORS.textSecondary,
+    },
+    interactionActionsMini: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    miniActionBtn: {
+        flex: 1,
+        height: 28,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    miniDecline: {
+        backgroundColor: '#FEF2F2',
+    },
+    miniAccept: {
+        backgroundColor: '#F0FDF4',
+    },
+    tourSummaryIconBg: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: COLORS.primary + '15',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+    },
+    miniBadge: {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+        backgroundColor: '#EF4444',
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: COLORS.white,
+    },
+    miniBadgeText: {
+        color: COLORS.white,
+        fontSize: 8,
+        fontWeight: 'bold',
+    },
+    tourSummaryTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    tourSummarySub: {
+        fontSize: 11,
+        color: COLORS.textSecondary,
     },
 });

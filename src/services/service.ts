@@ -1,7 +1,7 @@
 import { RegisterUserPayload } from "../../src/types/tenant.types";
 import { getToken, removeToken, saveToken, saveUser } from "../utils/auth";
 
-const BASE_URL = "http://172.30.51.246:3000";
+const BASE_URL = "http://10.97.69.246:3000";
 
 // ==================== REGISTER USER ====================
 export const registerUser = async (data: RegisterUserPayload) => {
@@ -276,6 +276,7 @@ const authHeaders = async () => {
   };
 };
 
+
 // ---------- Profile ----------
 export const getProfile = async () => {
   const res = await fetch(`${BASE_URL}/owners/profile`, {
@@ -421,5 +422,72 @@ export const markNotificationReadApi = async (id: number | string) => {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to mark notification as read");
+  return res.json();
+};
+
+// ==================== INTERACTION SERVICES ====================
+
+export const createTourRequestApi = async (data: {
+  owner_id: number;
+  property_id: number;
+  tour_date: string;
+  tour_time: string;
+  message?: string;
+}) => {
+  const res = await fetch(`${BASE_URL}/interactions/tour`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || "Failed to send tour request");
+  }
+  return res.json();
+};
+
+export const getTourRequestsApi = async (role: 'owner' | 'tenant') => {
+  const res = await fetch(`${BASE_URL}/interactions/tours?role=${role}`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch tour requests");
+  return res.json();
+};
+
+export const updateTourStatusApi = async (id: number | string, status: 'accepted' | 'rejected') => {
+  const res = await fetch(`${BASE_URL}/interactions/tour/${id}/status`, {
+    method: "PATCH",
+    headers: await authHeaders(),
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Failed to update tour status");
+  return res.json();
+};
+
+export const createCallRequestApi = async (owner_id: number) => {
+  const res = await fetch(`${BASE_URL}/interactions/call`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ owner_id }),
+  });
+  if (!res.ok) throw new Error("Failed to send call request");
+  return res.json();
+};
+
+export const getCallRequestsApi = async (role: 'owner' | 'tenant') => {
+  const res = await fetch(`${BASE_URL}/interactions/calls?role=${role}`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch call requests");
+  return res.json();
+};
+
+export const updateCallStatusApi = async (id: number | string, status: 'accepted' | 'rejected') => {
+  const res = await fetch(`${BASE_URL}/interactions/call/${id}/status`, {
+    method: "PATCH",
+    headers: await authHeaders(),
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Failed to update call status");
   return res.json();
 };

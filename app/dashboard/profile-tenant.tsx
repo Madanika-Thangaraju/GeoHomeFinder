@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
-import { getLikedPropertiesApi, getProfile, getRecentlyViewedApi, getSavedPropertiesApi, updateProfile } from '../../src/services/service';
+import { getCallRequestsApi, getLikedPropertiesApi, getProfile, getRecentlyViewedApi, getSavedPropertiesApi, getTourRequestsApi, updateProfile } from '../../src/services/service';
 
 const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
 
@@ -52,17 +52,24 @@ export default function ProfileScreen() {
     const [likedProperties, setLikedProperties] = useState<any[]>([]);
     const [savedProperties, setSavedProperties] = useState<any[]>([]);
     const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
+    const [tourRequests, setTourRequests] = useState<any[]>([]);
+    const [callRequests, setCallRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     const loadProfileData = async () => {
         try {
             setLoading(true);
-            const [profile, liked, saved, viewed] = await Promise.all([
+            const [profile, liked, saved, viewed, tours, calls] = await Promise.all([
                 getProfile(),
                 getLikedPropertiesApi(),
                 getSavedPropertiesApi(),
-                getRecentlyViewedApi()
+                getRecentlyViewedApi(),
+                getTourRequestsApi('tenant'),
+                getCallRequestsApi('tenant')
             ]);
+
+            if (tours.success) setTourRequests(tours.data);
+            if (calls.success) setCallRequests(calls.data);
 
             const mappedData = {
                 name: profile.name || '',
@@ -331,6 +338,39 @@ export default function ProfileScreen() {
                         <Text style={{ marginLeft: 20, color: COLORS.textSecondary, fontStyle: 'italic' }}>No recently viewed properties</Text>
                     )}
                 </ScrollView>
+
+                {/* Sent Requests Summary */}
+                {(tourRequests.length > 0 || callRequests.length > 0) && (
+                    <View style={styles.requestsSection}>
+                        <Text style={styles.sectionTitle}>My Active Requests</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.requestsScroll}>
+                            {callRequests.map((req, idx) => (
+                                <View key={`call-${idx}`} style={[styles.requestStatusCard, { backgroundColor: COLORS.white }]}>
+                                    <View style={[styles.statusIndicator, { backgroundColor: req.status === 'accepted' ? '#10B981' : req.status === 'pending' ? '#F59E0B' : '#EF4444' }]} />
+                                    <Ionicons name="call" size={16} color={COLORS.textPrimary} />
+                                    <View>
+                                        <Text style={styles.requestOwner}>{req.other_name}</Text>
+                                        <Text style={[styles.requestStatus, { color: req.status === 'accepted' ? '#10B981' : req.status === 'pending' ? '#F59E0B' : '#EF4444' }]}>
+                                            {req.status === 'accepted' ? 'Call Approved' : req.status === 'pending' ? 'Request Sent' : 'Declined'}
+                                        </Text>
+                                    </View>
+                                </View>
+                            ))}
+                            {tourRequests.map((req, idx) => (
+                                <View key={`tour-${idx}`} style={[styles.requestStatusCard, { backgroundColor: COLORS.white }]}>
+                                    <View style={[styles.statusIndicator, { backgroundColor: req.status === 'accepted' ? '#10B981' : req.status === 'pending' ? '#F59E0B' : '#EF4444' }]} />
+                                    <Ionicons name="calendar" size={16} color={COLORS.textPrimary} />
+                                    <View>
+                                        <Text style={styles.requestOwner} numberOfLines={1}>{req.other_name}</Text>
+                                        <Text style={[styles.requestStatus, { color: req.status === 'accepted' ? '#10B981' : req.status === 'pending' ? '#F59E0B' : '#EF4444' }]}>
+                                            {req.status === 'accepted' ? 'Tour Scheduled' : req.status === 'pending' ? 'Pending' : 'Declined'}
+                                        </Text>
+                                    </View>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
 
                 {/* Settings & Support */}
                 <Text style={styles.sectionTitle}>Settings & Support</Text>
@@ -674,6 +714,41 @@ const styles = StyleSheet.create({
     predictionSub: {
         fontSize: 12,
         color: COLORS.textSecondary,
+        marginTop: 2,
+    },
+    requestsSection: {
+        marginTop: 24,
+    },
+    requestsScroll: {
+        paddingHorizontal: SPACING.m,
+        gap: 12,
+        paddingBottom: 4,
+    },
+    requestStatusCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        borderRadius: 16,
+        gap: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        minWidth: 180,
+        ...LAYOUT.shadow,
+        shadowOpacity: 0.03,
+    },
+    statusIndicator: {
+        width: 8,
+        height: 8,
+        borderRadius: 4
+    },
+    requestOwner: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: COLORS.textPrimary
+    },
+    requestStatus: {
+        fontSize: 11,
+        fontWeight: '600',
         marginTop: 2,
     },
 });

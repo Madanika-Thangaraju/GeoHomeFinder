@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as ExpoLocation from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Dimensions, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
-import { getConversation, getProperty, sendMessageToApi } from '../../src/services/service';
+import { createTourRequestApi, getConversation, getProperty, sendMessageToApi } from '../../src/services/service';
 import { getUser } from '../../src/utils/auth';
 
 const { width } = Dimensions.get('window');
@@ -25,6 +26,19 @@ export default function ChatScreen() {
     const [receiverId, setReceiverId] = useState<number | string>(0);
     const [displayInfo, setDisplayInfo] = useState({ name: '', image: null as any });
     const [chatProperty, setChatProperty] = useState<any>(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+    const EMOJIS = [
+        '😊', '😂', '🔥', '❤️', '👍', '🙌', '🎉', '✨',
+        '🏠', '📍', '💰', '📅', '🤝', '👋', '😎', '💯',
+        '😍', '🤩', '🤔', '😅', '🙄', '😴', '😭', '😡',
+        '🙏', '💪', '👏', '👌', '✌️', '🤞', '🤙', '🖐️',
+        '🏢', '🏘️', '🏙️', '🏗️', '🚶', '🚗', '🚕', '🚌'
+    ];
+
+    const handleEmojiSelect = (emoji: string) => {
+        setMessage(prev => prev + emoji);
+    };
 
     useEffect(() => {
         const setup = async () => {
@@ -135,6 +149,91 @@ export default function ChatScreen() {
                 receiver_id: receiverId,
                 isTyping: text.length > 0
             });
+        }
+    };
+
+    const handleScheduleVisit = async () => {
+        if (!currentUser || !chatProperty) return;
+
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const dateStr = tomorrow.toISOString().split('T')[0];
+
+        Alert.alert(
+            "Schedule Visit",
+            `Would you like to request a tour for tomorrow (${dateStr}) at 10:00 AM?`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Confirm",
+                    onPress: async () => {
+                        try {
+                            await createTourRequestApi({
+                                owner_id: Number(receiverId),
+                                property_id: chatProperty.id,
+                                tour_date: dateStr,
+                                tour_time: "10:00 AM",
+                                message: "Requested via chat quick action"
+                            });
+
+                            const msg = `📅 Requested a tour for ${dateStr} at 10:00 AM`;
+                            await sendMessageToApi(receiverId, msg, 'text', chatProperty.id);
+                            if (socketRef.current) {
+                                socketRef.current.emit('send_message', {
+                                    sender_id: currentUser.id,
+                                    receiver_id: receiverId,
+                                    content: msg,
+                                    type: 'text',
+                                    sender_type: currentUser.role
+                                });
+                            }
+                            setMessages(prev => [...prev, {
+                                id: 'tour-' + Date.now(),
+                                content: msg,
+                                sender_id: currentUser.id,
+                                created_at: new Date().toISOString(),
+                                is_user: true
+                            }]);
+                        } catch (error) {
+                            Alert.alert("Error", "Failed to schedule tour");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleShareLocation = async () => {
+        try {
+            const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert("Permission Denied", "Allow location access to share your position.");
+                return;
+            }
+            const loc = await ExpoLocation.getCurrentPositionAsync({});
+            const mapsUrl = `https://www.google.com/maps?q=${loc.coords.latitude},${loc.coords.longitude}`;
+            const msg = `📍 My Location: ${mapsUrl}`;
+
+            await sendMessageToApi(receiverId, msg, 'text', chatProperty?.id || id);
+            if (socketRef.current) {
+                socketRef.current.emit('send_message', {
+                    sender_id: currentUser.id,
+                    receiver_id: receiverId,
+                    content: msg,
+                    type: 'text',
+                    sender_type: currentUser.role
+                });
+            }
+            setMessages(prev => [...prev, {
+                id: 'loc-' + Date.now(),
+                content: msg,
+                sender_id: currentUser.id,
+                created_at: new Date().toISOString(),
+                is_user: true
+            }]);
+        } catch (error) {
+            console.error("Location share error:", error);
+            Alert.alert("Error", "Could not get current location");
         }
     };
 
@@ -265,17 +364,15 @@ export default function ChatScreen() {
 
             {/* Input Area */}
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-                {/* Quick Actions - Mock for now */}
+                {/* Quick Actions */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActionsScroll} contentContainerStyle={{ paddingHorizontal: SPACING.m }}>
-                    <TouchableOpacity style={styles.quickActionChip}>
-                        <Ionicons name="calendar-outline" size={16} color={COLORS.textPrimary} />
-                        <Text style={styles.quickActionText}>Schedule Visit</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickActionChip}>
-                        <Ionicons name="cash-outline" size={16} color={COLORS.textPrimary} />
-                        <Text style={styles.quickActionText}>Negotiate Rent</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickActionChip}>
+                    {currentUser?.role !== 'owner' && (
+                        <TouchableOpacity style={styles.quickActionChip} onPress={handleScheduleVisit}>
+                            <Ionicons name="calendar-outline" size={16} color={COLORS.textPrimary} />
+                            <Text style={styles.quickActionText}>Schedule Visit</Text>
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity style={styles.quickActionChip} onPress={handleShareLocation}>
                         <Ionicons name="location-outline" size={16} color={COLORS.textPrimary} />
                         <Text style={styles.quickActionText}>Share Location</Text>
                     </TouchableOpacity>
@@ -294,7 +391,7 @@ export default function ChatScreen() {
                             value={message}
                             onChangeText={handleTyping}
                         />
-                        <TouchableOpacity>
+                        <TouchableOpacity onPress={() => setShowEmojiPicker(true)}>
                             <Ionicons name="happy-outline" size={24} color={COLORS.textSecondary} />
                         </TouchableOpacity>
                     </View>
@@ -304,6 +401,43 @@ export default function ChatScreen() {
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
+
+            {/* Emoji Picker Modal */}
+            <Modal
+                visible={showEmojiPicker}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowEmojiPicker(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowEmojiPicker(false)}
+                >
+                    <View style={styles.emojiPickerContainer}>
+                        <View style={styles.emojiHeader}>
+                            <Text style={styles.emojiTitle}>Select Emoji</Text>
+                            <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+                                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.emojiGrid}>
+                            {EMOJIS.map((emoji, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={styles.emojiItem}
+                                    onPress={() => {
+                                        handleEmojiSelect(emoji);
+                                        setShowEmojiPicker(false);
+                                    }}
+                                >
+                                    <Text style={styles.emojiText}>{emoji}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </View>
     );
 }
@@ -574,5 +708,46 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 2,
+    },
+
+    // Emoji Picker
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    emojiPickerContainer: {
+        backgroundColor: COLORS.white,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        paddingBottom: 40,
+        maxHeight: '60%',
+    },
+    emojiHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    emojiTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    emojiGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 15,
+    },
+    emojiItem: {
+        width: '20%',
+        aspectRatio: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    emojiText: {
+        fontSize: 32,
     },
 });

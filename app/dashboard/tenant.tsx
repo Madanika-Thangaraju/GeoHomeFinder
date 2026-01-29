@@ -549,4 +549,22 @@ const styles = StyleSheet.create({
   emptyState: { paddingTop: 60, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
   emptyStateTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.textPrimary, marginTop: 16 },
   emptyStateSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', marginTop: 8 },
+  requestsSection: { paddingHorizontal: 16, marginBottom: 12 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 10 },
+  requestsScroll: { paddingRight: 16, gap: 10 },
+  requestStatusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    padding: 10,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    minWidth: 140,
+    ...LAYOUT.shadow
+  },
+  statusIndicator: { width: 8, height: 8, borderRadius: 4 },
+  requestOwner: { fontSize: 12, fontWeight: '600', color: COLORS.textPrimary, flexShrink: 1 },
+  requestStatus: { fontSize: 10, fontWeight: 'bold' },
 });
