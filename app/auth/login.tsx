@@ -128,7 +128,7 @@ export default function LoginScreen() {
                 [
                     {
                         text: 'Continue',
-                        onPress: () => router.push({
+                        onPress: () => router.replace({
                             pathname: '/auth/role-selection',
                             params: { fromLogin: 'true' }
                         }),
@@ -238,10 +238,6 @@ export default function LoginScreen() {
                             {errors.password ? (
                                 <Text style={styles.errorText}>{errors.password}</Text>
                             ) : null}
-
-                            <TouchableOpacity style={styles.forgotPassword}>
-                                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-                            </TouchableOpacity>
 
                             <GlowButton
                                 title={isLoading ? "Logging in..." : "Login"}

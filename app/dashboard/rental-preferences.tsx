@@ -4,34 +4,53 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     Dimensions,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
     View,
+    KeyboardAvoidingView,
+    Keyboard,
+    TouchableWithoutFeedback
 } from 'react-native';
 import { COLORS, FONTS, LAYOUT, SPACING } from '../../src/constants/theme';
 
 const CONFIGURATIONS = ['1 BHK', '2 BHK', '3 BHK', '4+ BHK'];
 
-const PROPERTY_TYPES = [
-    { id: 'apartment', label: 'Apartment', icon: 'business' },
-    { id: 'house', label: 'House', icon: 'home' },
-    { id: 'villa', label: 'Villa', icon: 'business' }, // finding a villa icon, 'business' is generic, maybe 'home' or similar
-    { id: 'PG/Co-living', label: 'PG/Co-living', icon: 'business' },
-];
+const PROPERTY_TYPES = {
+    Residential: [
+        { id: 'house', label: 'House', icon: 'home' },
+        { id: 'apartment', label: 'Apartment', icon: 'business' },
+        { id: 'villa', label: 'Villa', icon: 'home' },
+        { id: 'plot', label: 'Plot / Land', icon: 'map' },
+    ],
+    Commercial: [
+        { id: 'office', label: 'Office Space', icon: 'business' },
+        { id: 'cafe', label: 'Cafe / Restaurant', icon: 'restaurant' },
+        { id: 'shop', label: 'Retail Shop', icon: 'cart' },
+    ]
+};
+
+const FURNISHING_TYPES = ['Unfurnished', 'Semi-Furnished', 'Fully Furnished'];
 
 const { width } = Dimensions.get('window');
 const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
 
 export default function RentalPreferencesScreen() {
     const router = useRouter();
-    const [purpose, setPurpose] = useState<'Rent' | 'Buy' | ''>('');
+    const [category, setCategory] = useState<'Residential' | 'Commercial'>('Residential');
+    const [purpose, setPurpose] = useState<'Rent' | 'Buy' | 'Sell' | 'PG/Co-living' | ''>('');
     const [minBudget, setMinBudget] = useState('');
     const [maxBudget, setMaxBudget] = useState('');
-    const [selectedPropertyType, setSelectedPropertyType] = useState('');
+    const [selectedPropertyTypes, setSelectedPropertyTypes] = useState<string[]>([]);
     const [selectedConfig, setSelectedConfig] = useState('');
+    const [furnishing, setFurnishing] = useState('');
+    const [floorNo, setFloorNo] = useState('');
+    const [parking, setParking] = useState('');
+    const [mainRoadFacing, setMainRoadFacing] = useState(false);
+    const [washrooms, setWashrooms] = useState('');
 
     // New Location State
     const [searchQuery, setSearchQuery] = useState('');
@@ -40,11 +59,17 @@ export default function RentalPreferencesScreen() {
     const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
 
     const handleReset = () => {
+        setCategory('Residential');
         setPurpose('');
         setMinBudget('');
         setMaxBudget('');
-        setSelectedPropertyType('');
+        setSelectedPropertyTypes([]);
         setSelectedConfig('');
+        setFurnishing('');
+        setFloorNo('');
+        setParking('');
+        setMainRoadFacing(false);
+        setWashrooms('');
         setSearchQuery('');
         setSelectedLocation(null);
     };
@@ -103,182 +128,325 @@ export default function RentalPreferencesScreen() {
     };
 
     return (
-        <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Rental Preferences</Text>
-                <TouchableOpacity onPress={handleReset}>
-                    <Text style={styles.resetText}>Reset</Text>
-                </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-
-                {/* Location Section */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionLabel}>LOCATION</Text>
-                    <View style={styles.searchBar}>
-                        <Ionicons name="search" size={18} color={COLORS.textSecondary} />
-                        <TextInput
-                            style={styles.searchInput}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                            placeholder="Search location..."
-                            placeholderTextColor={COLORS.textSecondary}
-                        />
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+        >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.container}>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>Rental Preferences</Text>
+                        <TouchableOpacity onPress={handleReset}>
+                            <Text style={styles.resetText}>Reset</Text>
+                        </TouchableOpacity>
                     </View>
-                    {showPredictions && predictions.length > 0 && (
-                        <View style={styles.predictionsContainer}>
-                            {predictions.map((item, idx) => (
-                                <TouchableOpacity key={idx} style={styles.predictionItem} onPress={() => selectPlace(item)}>
-                                    <Ionicons name="location-outline" size={18} color={COLORS.textSecondary} style={{ marginRight: 10 }} />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.predictionMain} numberOfLines={1}>{item.placePrediction?.structuredFormat?.mainText?.text}</Text>
-                                        <Text style={styles.predictionSub} numberOfLines={1}>{item.placePrediction?.structuredFormat?.secondaryText?.text}</Text>
-                                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
+                        {/* Location Section */}
+                        <View style={styles.section}>
+                            <Text style={styles.sectionLabel}>LOCATION</Text>
+                            {selectedLocation ? (
+                                <View style={styles.searchBar}>
+                                    <Ionicons name="location-sharp" size={16} color={COLORS.primary} />
+                                    <Text style={styles.selectedLocationText} numberOfLines={1}>
+                                        {selectedLocation.address.split(',')[0]}
+                                    </Text>
+                                    <Ionicons name="checkmark-circle" size={16} color={COLORS.primary} />
+                                </View>
+                            ) : (
+                                <View style={styles.searchBar}>
+                                    <Ionicons name="search" size={18} color={COLORS.textSecondary} />
+                                    <TextInput
+                                        style={styles.searchInput}
+                                        value={searchQuery}
+                                        onChangeText={setSearchQuery}
+                                        placeholder="Search location..."
+                                        placeholderTextColor={COLORS.textSecondary}
+                                    />
+                                </View>
+                            )}
+                            {showPredictions && predictions.length > 0 && (
+                                <View style={styles.predictionsContainer}>
+                                    {predictions.map((item, idx) => (
+                                        <TouchableOpacity key={idx} style={styles.predictionItem} onPress={() => selectPlace(item)}>
+                                            <Ionicons name="location-outline" size={18} color={COLORS.textSecondary} style={{ marginRight: 10 }} />
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.predictionMain} numberOfLines={1}>{item.placePrediction?.structuredFormat?.mainText?.text}</Text>
+                                                <Text style={styles.predictionSub} numberOfLines={1}>{item.placePrediction?.structuredFormat?.secondaryText?.text}</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Category Section */}
+                        <View style={styles.section}>
+                            <Text style={styles.sectionLabel}>PROPERTY CATEGORY</Text>
+                            <View style={styles.purposeContainer}>
+                                <TouchableOpacity
+                                    style={[styles.purposeButton, category === 'Residential' && styles.purposeButtonActive]}
+                                    onPress={() => {
+                                        setCategory('Residential');
+                                        setPurpose('');
+                                        setSelectedPropertyTypes([]);
+                                    }}
+                                >
+                                    <Text style={[styles.purposeText, category === 'Residential' && styles.purposeTextActive]}>Residential</Text>
                                 </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
-                </View>
-
-                {/* Purpose Section */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionLabel}>PURPOSE</Text>
-                    <View style={styles.purposeContainer}>
-                        <TouchableOpacity
-                            style={[styles.purposeButton, purpose === 'Rent' && styles.purposeButtonActive]}
-                            onPress={() => setPurpose('Rent')}
-                        >
-                            <Text style={[styles.purposeText, purpose === 'Rent' && styles.purposeTextActive]}>Rent</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.purposeButton, purpose === 'Buy' && styles.purposeButtonActive]}
-                            onPress={() => setPurpose('Buy')}
-                        >
-                            <Text style={[styles.purposeText, purpose === 'Buy' && styles.purposeTextActive]}>Buy</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* Monthly Budget Section */}
-                <View style={styles.section}>
-                    <View style={styles.budgetHeader}>
-                        <Text style={styles.sectionLabel}>MONTHLY BUDGET</Text>
-                        <Text style={styles.budgetRangeText}>₹{minBudget || '0'} - ₹{maxBudget || '0'}</Text>
-                    </View>
-
-                    <View style={styles.budgetCard}>
-                        <View style={styles.budgetInputs}>
-                            <View style={styles.inputContainer}>
-                                <Text style={styles.inputLabel}>Min</Text>
-                                <View style={styles.inputWrapper}>
-                                    <Text style={styles.currencySymbol}>₹</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={minBudget}
-                                        onChangeText={setMinBudget}
-                                        keyboardType="numeric"
-                                    />
-                                </View>
-                            </View>
-                            <Text style={styles.dash}>-</Text>
-                            <View style={styles.inputContainer}>
-                                <Text style={styles.inputLabel}>Max</Text>
-                                <View style={styles.inputWrapper}>
-                                    <Text style={styles.currencySymbol}>₹</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={maxBudget}
-                                        onChangeText={setMaxBudget}
-                                        keyboardType="numeric"
-                                    />
-                                </View>
+                                <TouchableOpacity
+                                    style={[styles.purposeButton, category === 'Commercial' && styles.purposeButtonActive]}
+                                    onPress={() => {
+                                        setCategory('Commercial');
+                                        setPurpose('');
+                                        setSelectedPropertyTypes([]);
+                                    }}
+                                >
+                                    <Text style={[styles.purposeText, category === 'Commercial' && styles.purposeTextActive]}>Commercial</Text>
+                                </TouchableOpacity>
                             </View>
                         </View>
-                    </View>
-                </View>
 
-                {/* Property Type Section */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionLabel}>PROPERTY TYPE</Text>
-                    <View style={styles.gridContainer}>
-                        {PROPERTY_TYPES.map((type) => (
-                            <TouchableOpacity
-                                key={type.id}
-                                style={[
-                                    styles.gridItem,
-                                    selectedPropertyType === type.id && styles.gridItemActive
-                                ]}
-                                onPress={() => setSelectedPropertyType(type.id)}
-                            >
-                                {selectedPropertyType === type.id && (
-                                    <View style={styles.checkIcon}>
-                                        <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
+                        {/* Purpose Section */}
+                        <View style={styles.section}>
+                            <Text style={styles.sectionLabel}>I WANT TO</Text>
+                            <View style={styles.chipsContainer}>
+                                {(category === 'Residential' ? ['Rent', 'Buy', 'PG/Co-living'] : ['Rent', 'Buy']).map((p) => (
+                                    <TouchableOpacity
+                                        key={p}
+                                        style={[styles.chip, purpose === p && styles.chipActive]}
+                                        onPress={() => setPurpose(p as any)}
+                                    >
+                                        <Text style={[styles.chipText, purpose === p && styles.chipTextActive]}>{p}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
+                        {/* Monthly Budget Section */}
+                        <View style={styles.section}>
+                            <View style={styles.budgetHeader}>
+                                <Text style={styles.sectionLabel}>MONTHLY BUDGET</Text>
+                                <Text style={styles.budgetRangeText}>₹{minBudget || '0'} - ₹{maxBudget || '0'}</Text>
+                            </View>
+
+                            <View style={styles.budgetCard}>
+                                <View style={styles.budgetInputs}>
+                                    <View style={styles.inputContainer}>
+                                        <Text style={styles.inputLabel}>Min</Text>
+                                        <View style={styles.inputWrapper}>
+                                            <Text style={styles.currencySymbol}>₹</Text>
+                                            <TextInput
+                                                style={styles.input}
+                                                value={minBudget}
+                                                onChangeText={setMinBudget}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
                                     </View>
-                                )}
-                                <View style={[styles.iconBox, selectedPropertyType === type.id && styles.iconBoxActive]}>
-                                    <Ionicons name={type.icon as any} size={24} color={selectedPropertyType === type.id ? COLORS.primary : COLORS.textSecondary} />
+                                    <Text style={styles.dash}>-</Text>
+                                    <View style={styles.inputContainer}>
+                                        <Text style={styles.inputLabel}>Max</Text>
+                                        <View style={styles.inputWrapper}>
+                                            <Text style={styles.currencySymbol}>₹</Text>
+                                            <TextInput
+                                                style={styles.input}
+                                                value={maxBudget}
+                                                onChangeText={setMaxBudget}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                    </View>
                                 </View>
-                                <Text style={styles.gridLabel}>{type.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                            </View>
+                        </View>
+
+                        {/* Property Type Section */}
+                        <View style={styles.section}>
+                            <Text style={styles.sectionLabel}>PROPERTY TYPE</Text>
+                            <View style={styles.gridContainer}>
+                                {PROPERTY_TYPES[category].map((type) => (
+                                    <TouchableOpacity
+                                        key={type.id}
+                                        style={[
+                                            styles.gridItem,
+                                            selectedPropertyTypes.includes(type.id) && styles.gridItemActive
+                                        ]}
+                                        onPress={() => {
+                                            setSelectedPropertyTypes(prev =>
+                                                prev.includes(type.id) ? prev.filter(t => t !== type.id) : [...prev, type.id]
+                                            );
+                                        }}
+                                    >
+                                        {selectedPropertyTypes.includes(type.id) && (
+                                            <View style={styles.checkIcon}>
+                                                <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
+                                            </View>
+                                        )}
+                                        <View style={[styles.iconBox, selectedPropertyTypes.includes(type.id) && styles.iconBoxActive]}>
+                                            <Ionicons name={type.icon as any} size={24} color={selectedPropertyTypes.includes(type.id) ? COLORS.primary : COLORS.textSecondary} />
+                                        </View>
+                                        <Text style={styles.gridLabel}>{type.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
+                        {/* Residential Specific Filters */}
+                        {category === 'Residential' && !selectedPropertyTypes.includes('plot') && (
+                            <>
+                                {/* Configuration Section */}
+                                <View style={styles.section}>
+                                    <Text style={styles.sectionLabel}>CONFIGURATION (BHK)</Text>
+                                    <View style={styles.chipsContainer}>
+                                        {CONFIGURATIONS.map((config) => (
+                                            <TouchableOpacity
+                                                key={config}
+                                                style={[
+                                                    styles.chip,
+                                                    selectedConfig === config && styles.chipActive
+                                                ]}
+                                                onPress={() => setSelectedConfig(config)}
+                                            >
+                                                <Text style={[
+                                                    styles.chipText,
+                                                    selectedConfig === config && styles.chipTextActive
+                                                ]}>{config}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </View>
+
+                                {/* Furnishing Section */}
+                                <View style={styles.section}>
+                                    <Text style={styles.sectionLabel}>FURNISHING STATUS</Text>
+                                    <View style={styles.chipsContainer}>
+                                        {FURNISHING_TYPES.map((f) => (
+                                            <TouchableOpacity
+                                                key={f}
+                                                style={[
+                                                    styles.chip,
+                                                    furnishing === f && styles.chipActive
+                                                ]}
+                                                onPress={() => setFurnishing(f)}
+                                            >
+                                                <Text style={[
+                                                    styles.chipText,
+                                                    furnishing === f && styles.chipTextActive
+                                                ]}>{f}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </View>
+                            </>
+                        )}
+
+                        {/* Commercial Specific Filters */}
+                        {category === 'Commercial' && (
+                            <>
+                                <View style={styles.section}>
+                                    <Text style={styles.sectionLabel}>ADDITIONAL FILTERS</Text>
+                                    <View style={styles.budgetCard}>
+                                        <View style={styles.editRow}>
+                                            <Text style={styles.editLabel}>Floor Number</Text>
+                                            <TextInput
+                                                style={styles.textInputCompact}
+                                                placeholder="Any"
+                                                value={floorNo}
+                                                onChangeText={setFloorNo}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <View style={styles.editRow}>
+                                            <Text style={styles.editLabel}>Parking Capacity</Text>
+                                            <TextInput
+                                                style={styles.textInputCompact}
+                                                placeholder="Any"
+                                                value={parking}
+                                                onChangeText={setParking}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <View style={styles.editRow}>
+                                            <Text style={styles.editLabel}>Washrooms</Text>
+                                            <TextInput
+                                                style={styles.textInputCompact}
+                                                placeholder="Any"
+                                                value={washrooms}
+                                                onChangeText={setWashrooms}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <TouchableOpacity
+                                            style={styles.checkboxRow}
+                                            onPress={() => setMainRoadFacing(!mainRoadFacing)}
+                                        >
+                                            <Ionicons
+                                                name={mainRoadFacing ? "checkbox" : "square-outline"}
+                                                size={24}
+                                                color={mainRoadFacing ? COLORS.primary : COLORS.textSecondary}
+                                            />
+                                            <Text style={styles.checkboxLabel}>Main Road Facing</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </>
+                        )}
+
+                        {/* Save Button */}
+                        <TouchableOpacity
+                            style={styles.saveButton}
+                            onPress={async () => {
+                                if (!purpose) {
+                                    alert("Please select what you're looking for (Rent, Buy, etc.)");
+                                    return;
+                                }
+                                if (selectedPropertyTypes.length === 0) {
+                                    alert("Please select at least one property type.");
+                                    return;
+                                }
+                                if (!selectedLocation) {
+                                    alert("Please select a location.");
+                                    return;
+                                }
+
+                                try {
+                                    const prefs = {
+                                        category,
+                                        purpose,
+                                        minBudget,
+                                        maxBudget,
+                                        selectedPropertyTypes,
+                                        selectedConfig,
+                                        furnishing,
+                                        floorNo,
+                                        parking,
+                                        mainRoadFacing,
+                                        washrooms,
+                                        location: selectedLocation
+                                    };
+                                    await AsyncStorage.setItem('rentalPreferences', JSON.stringify(prefs));
+                                    console.log("RentalPreferences: Saved preferences:", prefs);
+                                    router.push('/dashboard/search-results');
+                                } catch (error) {
+                                    console.error("Failed to save rental preferences", error);
+                                }
+                            }}
+                        >
+                            <Text style={styles.saveButtonText}>Apply Filters</Text>
+                            <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+                        </TouchableOpacity>
+
+                        <View style={{ height: 40 }} />
+                    </ScrollView>
                 </View>
-
-                {/* Configuration Section */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionLabel}>CONFIGURATION</Text>
-                    <View style={styles.chipsContainer}>
-                        {CONFIGURATIONS.map((config) => (
-                            <TouchableOpacity
-                                key={config}
-                                style={[
-                                    styles.chip,
-                                    selectedConfig === config && styles.chipActive
-                                ]}
-                                onPress={() => setSelectedConfig(config)}
-                            >
-                                <Text style={[
-                                    styles.chipText,
-                                    selectedConfig === config && styles.chipTextActive
-                                ]}>{config}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-
-                {/* Save Button */}
-                <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={async () => {
-                        try {
-                            const prefs = {
-                                purpose,
-                                minBudget,
-                                maxBudget,
-                                selectedPropertyType,
-                                selectedConfig,
-                                location: selectedLocation
-                            };
-                            await AsyncStorage.setItem('rentalPreferences', JSON.stringify(prefs));
-                            console.log("RentalPreferences: Saved preferences:", prefs);
-                            router.push('/dashboard/search-results');
-                        } catch (error) {
-                            console.error("Failed to save rental preferences", error);
-                        }
-                    }}
-                >
-                    <Text style={styles.saveButtonText}>Apply Filters</Text>
-                    <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
-                </TouchableOpacity>
-
-                <View style={{ height: 40 }} />
-            </ScrollView>
-        </View>
+            </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
     );
 }
 
@@ -542,6 +710,13 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: COLORS.textPrimary,
     },
+    selectedLocationText: {
+        flex: 1,
+        marginLeft: 8,
+        fontWeight: '600',
+        color: COLORS.textPrimary,
+        fontSize: 14,
+    },
     predictionsContainer: {
         backgroundColor: COLORS.white,
         marginTop: 5,
@@ -569,5 +744,40 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: COLORS.textSecondary,
         marginTop: 2,
+    },
+    editRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+    },
+    editLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.textPrimary,
+    },
+    textInputCompact: {
+        width: 100,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        fontSize: 14,
+        color: COLORS.textPrimary,
+        fontWeight: 'bold',
+        textAlign: 'right',
+    },
+    checkboxRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 12,
+        gap: 10,
+    },
+    checkboxLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.textPrimary,
     },
 });

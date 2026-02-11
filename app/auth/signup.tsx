@@ -270,7 +270,7 @@ export default function SignupScreen() {
                 [
                     {
                         text: 'Continue',
-                        onPress: () => router.push('/auth/role-selection'),
+                        onPress: () => router.replace('/auth/role-selection'),
                     },
                 ]
             );

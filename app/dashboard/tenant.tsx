@@ -1,9 +1,9 @@
-import { getLikedPropertiesApi, getProfile, getSavedPropertiesApi, likePropertyApi, savePropertyApi, tenantProperties, trackPropertyViewApi } from '@/src/services/service';
+import { getLikedPropertiesApi, getNotificationsApi, getProfile, getSavedPropertiesApi, likePropertyApi, savePropertyApi, tenantProperties, trackPropertyViewApi } from '@/src/services/service';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -57,6 +57,7 @@ export default function TenantDashboard() {
   const [predictions, setPredictions] = useState<any[]>([]);
   const [showPredictions, setShowPredictions] = useState(false);
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -104,7 +105,7 @@ export default function TenantDashboard() {
           ...prop,
           // Backend already maps imageUrl to image: { uri: '...' }
           status: prop.status || (prop.is_available === 0 ? 'Sold Out' : 'Available'),
-          match: prop.match || `${Math.floor(Math.random() * 20) + 80}% Fit`,
+          match: prop.match || 'Relevant Suggestion',
         };
       });
       setProperties(enrichedData);
@@ -131,6 +132,12 @@ export default function TenantDashboard() {
       }
 
       // Try for current location
+      const isLocationEnabled = await Location.hasServicesEnabledAsync();
+      if (!isLocationEnabled) {
+        console.log('[Location] Services disabled');
+        throw new Error('Location services are disabled');
+      }
+
       let location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
@@ -140,14 +147,20 @@ export default function TenantDashboard() {
     } catch (error: any) {
       console.log('[Location] Logic failed:', error.message);
 
-      // If we don't have ANY location, alert user about GPS
+      // Fallback to default Coimbatore if both live and profile location are missing
+      if (!locationCoords && !userProfile?.latitude) {
+        console.log("Using default fallback location");
+        const fallback = { lat: 11.0168, lng: 76.9558 };
+        setLocationCoords(fallback);
+        setRegion(prev => ({ ...prev, latitude: fallback.lat, longitude: fallback.lng }));
+        fetchProperties(fallback.lat, fallback.lng, radius);
+      }
+
+      // If we don't have ANY results and GPS is disabled, warn once
       const isUnavailable = error.message.includes('unavailable') || error.message.includes('disabled');
-      if (!region.latitude && isUnavailable) {
-        Alert.alert(
-          "Location Unavailable",
-          "Please make sure your device's GPS is turned ON in settings.",
-          [{ text: "OK" }]
-        );
+      if (isUnavailable && properties.length === 0) {
+        // Just log it, don't block with Alert unless critical
+        console.warn("Location services disabled");
       }
     }
   };
@@ -178,6 +191,15 @@ export default function TenantDashboard() {
       }
     } catch (error) {
       console.error('Failed to load profile', error);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const list = await getNotificationsApi('tenant');
+      setNotifications(list);
+    } catch (error) {
+      console.error('Failed to load notifications', error);
     }
   };
 
@@ -215,6 +237,7 @@ export default function TenantDashboard() {
   useEffect(() => {
     getUserLocation();
     fetchUserProfile();
+    fetchNotifications();
   }, []);
 
   useEffect(() => {
@@ -360,6 +383,9 @@ export default function TenantDashboard() {
           </TouchableOpacity>
         </View>
 
+
+
+
         {showPredictions && predictions.length > 0 && (
           <View style={styles.predictionsContainer}>
             {predictions.map((item, idx) => (
@@ -380,6 +406,8 @@ export default function TenantDashboard() {
           style={StyleSheet.absoluteFillObject}
           region={region}
           onRegionChangeComplete={onRegionChangeComplete}
+          showsUserLocation={true}
+          showsMyLocationButton={false} // We will add a custom one for better styling
         >
           {properties.map((prop) => {
             const lat = parseFloat(prop.latitude || prop.lat);
@@ -409,6 +437,14 @@ export default function TenantDashboard() {
             <Ionicons name="remove" size={24} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.myLocationBtn}
+          onPress={getUserLocation}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="locate" size={24} color={COLORS.primary} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.bottomSheet}>
@@ -432,6 +468,8 @@ export default function TenantDashboard() {
             {loading ? 'Finding matching homes...' : `${properties.length} homes near you`}
           </Text>
         </View>
+
+
 
         <ScrollView showsVerticalScrollIndicator={false} bounces={true} contentContainerStyle={{ flexGrow: 1 }}>
           {loading && properties.length === 0 && (
@@ -488,12 +526,21 @@ export default function TenantDashboard() {
           <Text style={styles.navLabel}>Liked</Text>
           {favorites.length > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{favorites.length}</Text></View>}
         </TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => router.push('/dashboard/notifications')}>
+          <Ionicons name="notifications" size={24} color={COLORS.textSecondary} />
+          <Text style={styles.navLabel}>Notifications</Text>
+          {notifications.filter(n => !n.is_read).length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{notifications.filter(n => !n.is_read).length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
         <TouchableOpacity style={styles.navButton} onPress={() => router.push('/dashboard/profile-tenant')}>
           <Ionicons name="person" size={24} color={COLORS.textSecondary} />
           <Text style={styles.navLabel}>Profile</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </View >
   );
 }
 
@@ -514,6 +561,19 @@ const styles = StyleSheet.create({
   zoomControls: { position: 'absolute', right: 16, top: '40%', backgroundColor: COLORS.white, borderRadius: 8, ...LAYOUT.shadow, zIndex: 40 },
   zoomBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   zoomDivider: { height: 1, backgroundColor: '#F1F5F9', width: '80%', alignSelf: 'center' },
+  myLocationBtn: {
+    position: 'absolute',
+    right: 16,
+    bottom: 46, // Adjusted to be above the bottom sheet
+    backgroundColor: COLORS.white,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...LAYOUT.shadow,
+    zIndex: 40,
+  },
   bottomSheet: { flex: 1, backgroundColor: '#F8FAFC', marginTop: -30, borderTopLeftRadius: 30, borderTopRightRadius: 30, zIndex: 20, ...LAYOUT.shadow },
   sheetHandle: { width: 40, height: 4, backgroundColor: '#CBD5E1', borderRadius: 2, alignSelf: 'center', marginVertical: 10 },
   compactControls: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: COLORS.white, marginHorizontal: 16, borderRadius: 12, ...LAYOUT.shadow },
@@ -546,6 +606,22 @@ const styles = StyleSheet.create({
   navLabel: { fontSize: 12, marginTop: 4, color: COLORS.textSecondary, fontWeight: '600' },
   badge: { position: 'absolute', top: -5, right: -10, backgroundColor: '#EF4444', borderRadius: 10, paddingHorizontal: 5, height: 18, justifyContent: 'center', alignItems: 'center' },
   badgeText: { color: COLORS.white, fontSize: 10, fontWeight: 'bold' },
+  headerBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.white
+  },
+  notificationIconBtn: {
+    padding: 4,
+  },
   emptyState: { paddingTop: 60, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
   emptyStateTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.textPrimary, marginTop: 16 },
   emptyStateSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', marginTop: 8 },

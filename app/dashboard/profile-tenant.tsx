@@ -2,9 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
-import { getCallRequestsApi, getLikedPropertiesApi, getProfile, getRecentlyViewedApi, getSavedPropertiesApi, getTourRequestsApi, updateProfile } from '../../src/services/service';
+import { getCallRequestsApi, getLikedPropertiesApi, getProfile, getSavedPropertiesApi, getTourRequestsApi, updateProfile } from '../../src/services/service';
 
 const GOOGLE_PLACES_API_KEY = "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s";
 
@@ -51,7 +51,7 @@ export default function ProfileScreen() {
     const [editData, setEditData] = useState({ ...userData });
     const [likedProperties, setLikedProperties] = useState<any[]>([]);
     const [savedProperties, setSavedProperties] = useState<any[]>([]);
-    const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
+
     const [tourRequests, setTourRequests] = useState<any[]>([]);
     const [callRequests, setCallRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -59,11 +59,10 @@ export default function ProfileScreen() {
     const loadProfileData = async () => {
         try {
             setLoading(true);
-            const [profile, liked, saved, viewed, tours, calls] = await Promise.all([
+            const [profile, liked, saved, tours, calls] = await Promise.all([
                 getProfile(),
                 getLikedPropertiesApi(),
                 getSavedPropertiesApi(),
-                getRecentlyViewedApi(),
                 getTourRequestsApi('tenant'),
                 getCallRequestsApi('tenant')
             ]);
@@ -86,7 +85,7 @@ export default function ProfileScreen() {
             setEditData(mappedData);
             setLikedProperties(liked || []);
             setSavedProperties(saved || []);
-            setRecentlyViewed(viewed || []);
+            setSavedProperties(saved || []);
         } catch (error) {
             console.error('Failed to load profile data', error);
         } finally {
@@ -226,8 +225,8 @@ export default function ProfileScreen() {
         </View>
     );
 
-    const PropertyToolCard = ({ icon, color, bg, count, label }: any) => (
-        <TouchableOpacity style={styles.toolCard}>
+    const PropertyToolCard = ({ icon, color, bg, count, label, onPress }: any) => (
+        <TouchableOpacity style={styles.toolCard} onPress={onPress}>
             <View style={[styles.toolIcon, { backgroundColor: bg }]}>
                 <Ionicons name={icon} size={24} color={color} />
             </View>
@@ -236,20 +235,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
     );
 
-    const RecentlyViewedItem = ({ image, title, location }: any) => (
-        <View style={styles.recentCard}>
-            <View style={styles.recentImageContainer}>
-                <Image source={{ uri: image }} style={styles.recentImage} />
-                <View style={styles.heartBtnSmall}>
-                    <Ionicons name="heart" size={14} color="#EF4444" />
-                </View>
-            </View>
-            <View style={styles.recentContent}>
-                <Text style={styles.recentTitle}>{title}</Text>
-                <Text style={styles.recentLocation}>{location}</Text>
-            </View>
-        </View>
-    );
+
 
     return (
         <View style={styles.container}>
@@ -259,19 +245,23 @@ export default function ProfileScreen() {
                     <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>My Profile</Text>
-                <TouchableOpacity>
-                    <Ionicons name="settings-outline" size={24} color={COLORS.textPrimary} />
-                </TouchableOpacity>
+                <View style={{ width: 24 }} />
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Profile Section */}
                 <View style={styles.profileSection}>
                     <View style={styles.avatarContainer}>
-                        <Image
-                            source={userData.image ? { uri: userData.image } : { uri: 'https://cdn-icons-png.flaticon.com/512/149/149071.png' }}
-                            style={styles.avatar}
-                        />
+                        {userData.image ? (
+                            <Image
+                                source={{ uri: userData.image }}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={[styles.avatar, styles.initialsAvatar]}>
+                                <Text style={styles.initialsText}>{userData.name?.charAt(0) || 'U'}</Text>
+                            </View>
+                        )}
                         <TouchableOpacity
                             style={styles.editBtn}
                             onPress={() => {
@@ -291,12 +281,7 @@ export default function ProfileScreen() {
                     </View>
                 </View>
 
-                {/* Stats Row */}
-                <View style={styles.statsRow}>
-                    <StatItem count={likedProperties.length.toString()} label="Liked" icon="heart" color="#EF4444" />
-                    <StatItem count={recentlyViewed.length.toString()} label="Viewed" icon="eye" color="#3B82F6" />
-                    <StatItem count="2" label="Applied" icon="briefcase" color="#F59E0B" />
-                </View>
+
 
                 {/* Property Tools */}
                 <Text style={styles.sectionTitle}>Property Tools</Text>
@@ -306,38 +291,20 @@ export default function ProfileScreen() {
                         color="#3B82F6"
                         bg="#EFF6FF"
                         count={savedProperties.length.toString()}
-                        label="Saved Properties"
+                        label="Saved"
                         onPress={() => router.push('/dashboard/saved-list')}
                     />
                     <PropertyToolCard
-                        icon="notifications"
-                        color="#8B5CF6"
-                        bg="#F3E8FF"
-                        count="5"
-                        label="Active Alerts"
+                        icon="heart"
+                        color="#EF4444"
+                        bg="#FEF2F2"
+                        count={likedProperties.length.toString()}
+                        label="Liked"
+                        onPress={() => router.push('/dashboard/liked-properties')}
                     />
                 </View>
 
-                {/* Recently Viewed */}
-                <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-                    <Text style={styles.sectionTitleNoMargin}>Recently Viewed</Text>
-                    <TouchableOpacity>
-                        <Text style={styles.historyLink}>History</Text>
-                    </TouchableOpacity>
-                </View>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentList}>
-                    {recentlyViewed.length > 0 ? recentlyViewed.map((prop) => (
-                        <RecentlyViewedItem
-                            key={prop.id}
-                            image={prop.image_url || "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=400&q=80"}
-                            title={prop.title}
-                            location={prop.address}
-                        />
-                    )) : (
-                        <Text style={{ marginLeft: 20, color: COLORS.textSecondary, fontStyle: 'italic' }}>No recently viewed properties</Text>
-                    )}
-                </ScrollView>
 
                 {/* Sent Requests Summary */}
                 {(tourRequests.length > 0 || callRequests.length > 0) && (
@@ -345,16 +312,24 @@ export default function ProfileScreen() {
                         <Text style={styles.sectionTitle}>My Active Requests</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.requestsScroll}>
                             {callRequests.map((req, idx) => (
-                                <View key={`call-${idx}`} style={[styles.requestStatusCard, { backgroundColor: COLORS.white }]}>
+                                <TouchableOpacity
+                                    key={`call-${idx}`}
+                                    style={[styles.requestStatusCard, { backgroundColor: COLORS.white }]}
+                                    onPress={() => {
+                                        if (req.status === 'accepted' && req.other_phone) {
+                                            Linking.openURL(`tel:${req.other_phone}`);
+                                        }
+                                    }}
+                                >
                                     <View style={[styles.statusIndicator, { backgroundColor: req.status === 'accepted' ? '#10B981' : req.status === 'pending' ? '#F59E0B' : '#EF4444' }]} />
                                     <Ionicons name="call" size={16} color={COLORS.textPrimary} />
-                                    <View>
+                                    <View style={{ flex: 1 }}>
                                         <Text style={styles.requestOwner}>{req.other_name}</Text>
                                         <Text style={[styles.requestStatus, { color: req.status === 'accepted' ? '#10B981' : req.status === 'pending' ? '#F59E0B' : '#EF4444' }]}>
-                                            {req.status === 'accepted' ? 'Call Approved' : req.status === 'pending' ? 'Request Sent' : 'Declined'}
+                                            {req.status === 'accepted' ? `Call: ${req.other_phone}` : req.status === 'pending' ? 'Request Sent' : 'Declined'}
                                         </Text>
                                     </View>
-                                </View>
+                                </TouchableOpacity>
                             ))}
                             {tourRequests.map((req, idx) => (
                                 <View key={`tour-${idx}`} style={[styles.requestStatusCard, { backgroundColor: COLORS.white }]}>
@@ -465,10 +440,16 @@ export default function ProfileScreen() {
                         </View>
                         <View style={styles.avatarEditContainer}>
                             <TouchableOpacity onPress={pickImage} style={styles.avatarContainer}>
-                                <Image
-                                    source={editData.image ? { uri: editData.image } : { uri: 'https://cdn-icons-png.flaticon.com/512/149/149071.png' }}
-                                    style={styles.avatarLarge}
-                                />
+                                {editData.image ? (
+                                    <Image
+                                        source={{ uri: editData.image }}
+                                        style={styles.avatarLarge}
+                                    />
+                                ) : (
+                                    <View style={[styles.avatarLarge, styles.initialsAvatarLarge]}>
+                                        <Text style={styles.initialsTextLarge}>{editData.name?.charAt(0) || 'U'}</Text>
+                                    </View>
+                                )}
                                 <View style={styles.avatarOverlay}>
                                     <Ionicons name="camera" size={24} color={COLORS.white} />
                                     <Text style={styles.cameraText}>Change Photo</Text>
@@ -568,9 +549,6 @@ export default function ProfileScreen() {
                                 <Ionicons name="heart-outline" size={20} color={COLORS.primary} />
                                 <Text style={styles.instructionText}>Save properties you like by clicking the heart icon on any listing.</Text>
                             </View>
-                            <TouchableOpacity style={[styles.editProfileBtn, { backgroundColor: '#F1F5F9', marginTop: 24 }]}>
-                                <Text style={[styles.editProfileText, { color: COLORS.textPrimary }]}>Contact Support</Text>
-                            </TouchableOpacity>
                         </ScrollView>
                     </View>
                 </View>
@@ -623,6 +601,8 @@ const styles = StyleSheet.create({
     profileSection: { alignItems: 'center', backgroundColor: COLORS.white, paddingVertical: 24, marginHorizontal: SPACING.m, marginTop: SPACING.m, borderRadius: 20, ...LAYOUT.shadow, shadowOpacity: 0.05 },
     avatarContainer: { position: 'relative', marginBottom: 12 },
     avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, borderColor: '#EFF6FF' },
+    initialsAvatar: { backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
+    initialsText: { fontSize: 32, fontWeight: 'bold', color: COLORS.primary },
     editBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#3B82F6', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.white },
     userName: { fontSize: 20, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 8 },
     roleContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -682,6 +662,8 @@ const styles = StyleSheet.create({
     inputField: { flex: 1, fontSize: 16, color: COLORS.textPrimary, paddingVertical: 0 },
     avatarEditContainer: { alignItems: 'center', marginBottom: 20 },
     avatarLarge: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#F1F5F9' },
+    initialsAvatarLarge: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#EFF6FF' },
+    initialsTextLarge: { fontSize: 48, fontWeight: 'bold', color: COLORS.primary },
     avatarOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 60, justifyContent: 'center', alignItems: 'center' },
     cameraText: { color: COLORS.white, fontSize: 10, fontWeight: 'bold', marginTop: 4 },
     predictionsModalList: {

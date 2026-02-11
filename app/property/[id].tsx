@@ -2,10 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../src/constants/theme';
 import { PROPERTIES } from '../../src/data/properties';
-import { createCallRequestApi, createTourRequestApi, getCallRequestsApi, getProperty } from '../../src/services/service';
+import { createCallRequestApi, createTourRequestApi, getCallRequestsApi, getLikedPropertiesApi, getProperty, likePropertyApi } from '../../src/services/service';
 
 const { width, height } = Dimensions.get('window');
 
@@ -53,10 +53,42 @@ export default function PropertyDetail() {
     const [isCalling, setIsCalling] = useState(false);
     const [callStatus, setCallStatus] = useState<'none' | 'pending' | 'accepted'>('none');
     const [ownerPhone, setOwnerPhone] = useState('');
+    const [isFavorite, setIsFavorite] = useState(false);
+    const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
+    const [showFullDescription, setShowFullDescription] = useState(false);
 
     React.useEffect(() => {
         fetchPropertyData();
     }, [idString]);
+
+    const checkFavoriteStatus = async (propId: number) => {
+        try {
+            const likedProps = await getLikedPropertiesApi();
+            if (Array.isArray(likedProps)) {
+                const found = likedProps.some((p: any) => p.id === propId || p.property_id === propId);
+                setIsFavorite(found);
+            }
+        } catch (error) {
+            console.log("Error checking favorite status", error);
+        }
+    };
+
+    const handleToggleFavorite = async () => {
+        if (isTogglingFavorite) return;
+
+        try {
+            setIsTogglingFavorite(true);
+            const newStatus = !isFavorite;
+            await likePropertyApi(idString, newStatus);
+            setIsFavorite(newStatus);
+            // Optionally show feedback
+        } catch (error: any) {
+            console.error("Failed to toggle favorite:", error);
+            Alert.alert("Error", "Could not update favorite status");
+        } finally {
+            setIsTogglingFavorite(false);
+        }
+    };
 
     const checkCallStatus = async (ownerId: number) => {
         try {
@@ -80,7 +112,10 @@ export default function PropertyDetail() {
             Alert.alert(
                 "Owner Contact Info",
                 `Contact ${property.owner.name} at: ${ownerPhone}`,
-                [{ text: "Call Now", onPress: () => { /* Linking.openURL(`tel:${ownerPhone}`) */ } }, { text: "Close" }]
+                [
+                    { text: "Call Now", onPress: () => Linking.openURL(`tel:${ownerPhone}`) },
+                    { text: "Close", style: "cancel" }
+                ]
             );
             return;
         }
@@ -124,6 +159,7 @@ export default function PropertyDetail() {
                 if (data.owner?.id) {
                     checkCallStatus(data.owner.id);
                 }
+                checkFavoriteStatus(Number(idString));
             }
         } catch (error) {
             console.error("Failed to fetch property details:", error);
@@ -143,6 +179,29 @@ export default function PropertyDetail() {
     }
 
     const availableDays = getNext7Days();
+
+    const handleGetDirections = () => {
+        const { latitude, longitude } = property;
+        if (!latitude || !longitude) {
+            Alert.alert("Location not available", "Coordinates for this property are missing.");
+            return;
+        }
+
+        const url = Platform.select({
+            ios: `maps://app?daddr=${latitude},${longitude}`,
+            android: `google.navigation:q=${latitude},${longitude}`,
+            default: `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
+        });
+
+        Linking.canOpenURL(url).then(supported => {
+            if (supported) {
+                Linking.openURL(url);
+            } else {
+                // Fallback to web URL
+                Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`);
+            }
+        });
+    };
 
     const handleConfirmTour = async () => {
         if (!userTimeInput.trim()) {
@@ -207,8 +266,16 @@ export default function PropertyDetail() {
                             <TouchableOpacity style={styles.circleBtn}>
                                 <Ionicons name="share-social-outline" size={24} color={COLORS.white} />
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.circleBtn}>
-                                <Ionicons name="heart-outline" size={24} color={COLORS.white} />
+                            <TouchableOpacity
+                                style={styles.circleBtn}
+                                onPress={handleToggleFavorite}
+                                disabled={isTogglingFavorite}
+                            >
+                                <Ionicons
+                                    name={isFavorite ? "heart" : "heart-outline"}
+                                    size={24}
+                                    color={isFavorite ? "#EF4444" : COLORS.white}
+                                />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -313,18 +380,29 @@ export default function PropertyDetail() {
                     {/* About Section */}
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>About this home</Text>
-                        <Text style={styles.descriptionText} numberOfLines={4}>
+                        <Text
+                            style={styles.descriptionText}
+                            numberOfLines={showFullDescription ? undefined : 4}
+                        >
                             {property.description}
                         </Text>
-                        <TouchableOpacity>
-                            <Text style={styles.readMore}>Read more</Text>
+                        <TouchableOpacity onPress={() => setShowFullDescription(!showFullDescription)}>
+                            <Text style={styles.readMore}>
+                                {showFullDescription ? "Read less" : "Read more"}
+                            </Text>
                         </TouchableOpacity>
                     </View>
 
                     {/* Location Section */}
                     <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Location</Text>
-                        <View style={styles.mapCard}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>Location</Text>
+                            <TouchableOpacity onPress={handleGetDirections} style={styles.getDirectionsBtn}>
+                                <Ionicons name="navigate-circle" size={18} color={COLORS.primary} />
+                                <Text style={styles.getDirectionsText}>Get Directions</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity style={styles.mapCard} activeOpacity={0.9} onPress={handleGetDirections}>
                             <Image
                                 source={{
                                     uri: property.latitude && property.longitude ?
@@ -335,19 +413,24 @@ export default function PropertyDetail() {
                             />
                             <View style={styles.mapOverlay}>
                                 <View style={styles.mapPin}>
-                                    <Ionicons name="location" size={20} color={COLORS.primary} />
+                                    <Ionicons name="location" size={24} color={COLORS.primary} />
                                 </View>
-                                {/* <TouchableOpacity style={styles.exploreBtn}>
-                                    <Text style={styles.exploreText}>Tap to explore</Text>
-                                </TouchableOpacity> */}
+                                <View style={styles.mapTapHint}>
+                                    <Text style={styles.mapTapHintText}>Tap to open Maps</Text>
+                                </View>
                             </View>
-                        </View>
+                        </TouchableOpacity>
                     </View>
 
                     {/* Owner Section */}
                     <View style={styles.ownerCard}>
                         <View style={styles.ownerHeader}>
-                            <Image source={property.owner.image} style={styles.ownerAvatar} />
+                            {/* <Image source={property.owner.image} style={styles.ownerAvatar} /> */}
+                            <View style={styles.ownerAvatar}>
+                                <Text style={{ color: COLORS.white, fontSize: 24, fontWeight: 'bold' }}>
+                                    {property.owner.name.charAt(0).toUpperCase()}
+                                </Text>
+                            </View>
                             <View style={{ flex: 1, marginLeft: 12 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     <Text style={styles.ownerName}>{property.owner.name}</Text>
@@ -419,7 +502,12 @@ export default function PropertyDetail() {
                         {/* Chat Header */}
                         <View style={styles.chatHeader}>
                             <View style={styles.ownerInfoSmall}>
-                                <Image source={property.owner.image} style={styles.ownerAvatarSmall} />
+                                {/* <Image source={property.owner.image} style={styles.ownerAvatarSmall} /> */}
+                                <View style={styles.ownerAvatarSmall}>
+                                    <Text style={{ color: COLORS.white, fontSize: 18, fontWeight: 'bold' }}>
+                                        {property.owner.name.charAt(0).toUpperCase()}
+                                    </Text>
+                                </View>
                                 <View>
                                     <Text style={styles.ownerNameSmall}>{property.owner.name}</Text>
                                     <View style={styles.onlineStatusRow}>
@@ -780,7 +868,9 @@ const styles = StyleSheet.create({
         width: 60,
         height: 60,
         borderRadius: 30,
-        backgroundColor: '#E2E8F0',
+        backgroundColor: COLORS.primary, // Changed from #E2E8F0 to primary
+        justifyContent: 'center',        // Added for text centering
+        alignItems: 'center',            // Added for text centering
     },
     ownerName: {
         fontSize: 18,
@@ -929,6 +1019,9 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
+        backgroundColor: COLORS.primary, // Added background
+        justifyContent: 'center',        // Added for text centering
+        alignItems: 'center',            // Added for text centering
     },
     ownerNameSmall: {
         fontSize: 16,
@@ -1074,6 +1167,32 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    getDirectionsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: COLORS.primary + '10',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    getDirectionsText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: COLORS.primary,
+    },
+    mapTapHint: {
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 20,
+        marginTop: 8,
+    },
+    mapTapHintText: {
+        color: COLORS.white,
+        fontSize: 11,
+        fontWeight: '600',
+    }
 });
 
 

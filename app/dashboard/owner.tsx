@@ -14,8 +14,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 // ... imports
 import { GlassCard } from '@/src/components/shared/GlassCard';
 import { COLORS, LAYOUT, SPACING } from '@/src/constants/theme';
-import { getCallRequestsApi, getNotificationsApi, getOwnerProperties, getProfile, getTourRequestsApi, updateCallStatusApi, updateTourStatusApi } from '../../src/services/service';
-import { decodeToken, getToken, getUser } from '../../src/utils/auth';
+import { getCallRequestsApi, getNotificationsApi, getOwnerProperties, getProfile, getTourRequestsApi, updateCallStatusApi, updateTourStatusApi } from '@/src/services/service';
+import { decodeToken, getToken, getUser } from '@/src/utils/auth';
 
 // ... inside component
 export default function OwnerDashboard() {
@@ -67,7 +67,7 @@ export default function OwnerDashboard() {
                             getOwnerProperties(userId),
                             getTourRequestsApi('owner'),
                             getCallRequestsApi('owner'),
-                            getNotificationsApi()
+                            getNotificationsApi('owner')
                         ]);
 
                         if (Array.isArray(listings)) setListingsCount(listings.length);
@@ -121,13 +121,7 @@ export default function OwnerDashboard() {
                         <TouchableOpacity onPress={() => router.back()}>
                             <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.setupProfileHeaderBtn}
-                            onPress={() => router.push('/dashboard/profile-owner')}
-                        >
-                            <Ionicons name="person-circle-outline" size={20} color={COLORS.primary} />
-                            <Text style={styles.setupProfileHeaderText}>Profile Setup</Text>
-                        </TouchableOpacity>
+
                     </View>
 
                     {/* Right Side Actions */}
@@ -264,30 +258,30 @@ export default function OwnerDashboard() {
                 )}
 
                 {/* Stats */}
-                <View style={styles.statsGrid}>
-                    <TouchableOpacity style={{ flex: 1 }} onPress={() => router.push('/dashboard/my-listings')}>
-                        <GlassCard style={styles.statsCard}>
-                            <View style={styles.statsIconBg}>
-                                <Ionicons name="home" size={24} color="#C084FC" />
-                            </View>
-                            <Text style={styles.statsValue}>{listingsCount}</Text>
-                            <Text style={styles.statsLabel}>Active Listings</Text>
-                        </GlassCard>
-                    </TouchableOpacity>
+                {/* Stats */}
+                {/* Stats */}
 
-                    <GlassCard style={styles.statsCard}>
-                        <View
-                            style={[
-                                styles.statsIconBg,
-                                { backgroundColor: 'rgba(56,189,248,0.2)' },
-                            ]}
-                        >
-                            <Ionicons name="eye" size={24} color="#38BDF8" />
+                {/* View Analytics Button */}
+                <TouchableOpacity
+                    style={styles.analyticsBtn}
+                    onPress={() => router.push('/dashboard/owner-stats')}
+                >
+                    <LinearGradient
+                        colors={['#F8FAFC', '#EFF6FF']}
+                        style={styles.analyticsGradient}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={styles.analyticsIconBg}>
+                                <Ionicons name="stats-chart" size={20} color={COLORS.primary} />
+                            </View>
+                            <View>
+                                <Text style={styles.analyticsTitle}>View Detailed Analytics</Text>
+                                <Text style={styles.analyticsSub}>Check sold, pending, and favorited properties</Text>
+                            </View>
                         </View>
-                        <Text style={styles.statsValue}>{userProfile?.views || '0'}</Text>
-                        <Text style={styles.statsLabel}>Total Views</Text>
-                    </GlassCard>
-                </View>
+                        <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+                    </LinearGradient>
+                </TouchableOpacity>
 
                 <View style={{ height: 120 }} />
             </ScrollView>
@@ -531,25 +525,58 @@ const styles = StyleSheet.create({
     },
     statsCard: {
         flex: 1,
-        height: 200,
+        height: 160,
         alignItems: 'center',
         justifyContent: 'center',
     },
     statsIconBg: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        width: 50,
+        height: 50,
+        borderRadius: 25,
         backgroundColor: 'rgba(192,132,252,0.2)',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 10,
     },
     statsValue: {
-        fontSize: 34,
+        fontSize: 28,
         fontWeight: 'bold',
     },
     statsLabel: {
-        fontSize: 14,
+        fontSize: 13,
+        color: COLORS.textSecondary,
+    },
+    analyticsBtn: {
+        marginHorizontal: SPACING.l,
+        marginBottom: SPACING.xl,
+        borderRadius: LAYOUT.radius.l,
+        ...LAYOUT.shadow,
+        backgroundColor: COLORS.white,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        overflow: 'hidden',
+    },
+    analyticsGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+    },
+    analyticsIconBg: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: '#EFF6FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    analyticsTitle: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    analyticsSub: {
+        fontSize: 11,
         color: COLORS.textSecondary,
     },
     bottomNav: {
@@ -594,20 +621,7 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: COLORS.white,
     },
-    setupProfileHeaderBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: COLORS.primary + '15',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        gap: 6,
-    },
-    setupProfileHeaderText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: COLORS.primary,
-    },
+
     tourSummaryCard: {
         flexDirection: 'row',
         alignItems: 'center',

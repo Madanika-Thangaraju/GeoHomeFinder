@@ -27,9 +27,12 @@ const PROPERTY_TYPES = [
   { id: "apartment", label: "Apartment", sub: "Flat in a building" },
   { id: "villa", label: "Villa", sub: "Premium gated" },
   { id: "plot", label: "Plot / Land", sub: "Open area" },
+  { id: "office", label: "Office Space", sub: "Business purpose" },
+  { id: "cafe", label: "Cafe / Restaurant", sub: "Food & Beverage" },
+  { id: "shop", label: "Retail Shop", sub: "Market area" },
 ];
 
-const LISTING_TYPES = ["Sell", "Rent", "PG/Co-living"];
+const LISTING_TYPES = ["Sell", "Rent", "PG/Co-living", "Commercial"];
 
 const FURNISHING_TYPES = ["Unfurnished", "Semi-Furnished", "Fully Furnished"];
 
@@ -61,6 +64,7 @@ export default function AddPropertyScreen() {
 
   const [propertyTitle, setPropertyTitle] = useState("");
   const [propertyDescription, setPropertyDescription] = useState("");
+  const [propertyCategory, setPropertyCategory] = useState<"Residential" | "Commercial" | "">(""); // New category state
   const [listingTypes, setListingTypes] = useState<string>("");
   const [propertyTypes, setPropertyTypes] = useState<string[]>([]);
   const [address, setAddress] = useState("");
@@ -74,6 +78,10 @@ export default function AddPropertyScreen() {
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [price, setPrice] = useState("");
+  const [floorNo, setFloorNo] = useState("");
+  const [parking, setParking] = useState("");
+  const [mainRoadFacing, setMainRoadFacing] = useState(false);
+  const [washrooms, setWashrooms] = useState("");
 
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [showPredictions, setShowPredictions] = useState(false);
@@ -106,6 +114,23 @@ export default function AddPropertyScreen() {
     }
   };
 
+  const selectPropertyCategory = (category: "Residential" | "Commercial") => {
+    setPropertyCategory(category);
+    setListingTypes(""); // Reset listing type when category changes
+    if (errors.listingTypes) {
+      setErrors((prev) => ({ ...prev, listingTypes: "" }));
+    }
+  };
+
+  const getListingOptions = () => {
+    if (propertyCategory === "Residential") {
+      return ["Sell", "Rent", "PG/Co-living"];
+    } else if (propertyCategory === "Commercial") {
+      return ["Rent", "Buy"];
+    }
+    return [];
+  };
+
   const togglePropertyType = (type: string) => {
     setPropertyTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
@@ -120,9 +145,22 @@ export default function AddPropertyScreen() {
   );
 
   const hasPlotType = propertyTypes.includes("plot");
+  const hasCommercialType = propertyTypes.some((t) =>
+    ["office", "cafe", "shop"].includes(t)
+  );
   const hasNonPlotType = propertyTypes.some((t) => t !== "plot");
   const hasRentListing = listingTypes === "Rent" || listingTypes === "PG/Co-living";
-  const hasSellingListing = listingTypes === "Sell";
+  const hasSellingListing = listingTypes === "Sell" || listingTypes === "Buy";
+
+  // Get available property types based on category
+  const getAvailablePropertyTypes = () => {
+    if (propertyCategory === "Residential") {
+      return PROPERTY_TYPES.filter(t => ["house", "apartment", "villa", "plot"].includes(t.id));
+    } else if (propertyCategory === "Commercial") {
+      return PROPERTY_TYPES.filter(t => ["office", "cafe", "shop"].includes(t.id));
+    }
+    return [];
+  };
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -402,7 +440,7 @@ export default function AddPropertyScreen() {
       isValid = false;
     }
 
-    if (hasResidentialType) {
+    if (hasResidentialType && !hasCommercialType) {
       if (!bhk.trim()) {
         newErrors.bhk = "BHK is required for residential properties";
         isValid = false;
@@ -421,7 +459,7 @@ export default function AddPropertyScreen() {
       }
     }
 
-    if (hasNonPlotType) {
+    if (hasNonPlotType && !hasCommercialType) {
       if (!bedrooms.trim()) {
         newErrors.bedrooms = "Number of bedrooms is required";
         isValid = false;
@@ -440,7 +478,7 @@ export default function AddPropertyScreen() {
       }
     }
 
-    if (hasNonPlotType) {
+    if (hasNonPlotType && !hasCommercialType) {
       if (!bathrooms.trim()) {
         newErrors.bathrooms = "Number of bathrooms is required";
         isValid = false;
@@ -456,7 +494,7 @@ export default function AddPropertyScreen() {
       }
     }
 
-    if (hasResidentialType || hasPlotType) {
+    if (hasResidentialType || hasPlotType || hasCommercialType) {
       if (!sqft.trim()) {
         newErrors.sqft = "Area is required";
         isValid = false;
@@ -523,7 +561,7 @@ export default function AddPropertyScreen() {
       }
     }
 
-    if (hasNonPlotType) {
+    if (hasNonPlotType && !hasCommercialType) {
       if (!furnishing) {
         newErrors.furnishing = "Please select furnishing status";
         isValid = false;
@@ -553,20 +591,24 @@ export default function AddPropertyScreen() {
 
     const payload = {
       title: propertyTitle.trim(),
-      listingTypes,
+      listingTypes: listingTypes === "Buy" ? "Sell" : listingTypes, // Map Buy to Sell for backend
       propertyTypes,
       address: address.trim(),
       location: locationCoords,
       bhk: hasResidentialType ? Number(bhk) : null,
-      bedrooms: hasNonPlotType ? Number(bedrooms) : null,
-      bathrooms: hasNonPlotType ? Number(bathrooms) : null,
-      sqft: (hasResidentialType || hasPlotType) ? Number(sqft) : null,
+      bedrooms: hasNonPlotType && !hasCommercialType ? Number(bedrooms) : null,
+      bathrooms: hasNonPlotType && !hasCommercialType ? Number(bathrooms) : null,
+      sqft: (hasResidentialType || hasPlotType || hasCommercialType) ? Number(sqft) : null,
       rentPrice: hasRentListing ? Number(rentPrice) : null,
       deposit: hasRentListing ? Number(deposit) : null,
       furnishing: hasNonPlotType ? furnishing : null,
       description: propertyDescription.trim(),
       images: images,
       price: hasSellingListing ? Number(price) : null,
+      floorNo: hasCommercialType && floorNo ? Number(floorNo) : null,
+      parking: hasCommercialType && parking ? Number(parking) : null,
+      mainRoadFacing: hasCommercialType ? mainRoadFacing : false,
+      washrooms: hasCommercialType && washrooms ? Number(washrooms) : null,
     };
 
     console.log("Submitting Property Payload:", JSON.stringify(payload, null, 2));
@@ -639,73 +681,125 @@ export default function AddPropertyScreen() {
           numberOfLines={4}
         />
 
-        {/* LISTING TYPE */}
+        {/* PROPERTY CATEGORY: RESIDENTIAL OR COMMERCIAL */}
         <Text style={styles.label}>
-          I WANT TO <Text style={styles.required}>*</Text>
+          PROPERTY CATEGORY <Text style={styles.required}>*</Text>
         </Text>
-        <View style={styles.segmentContainer}>
-          {LISTING_TYPES.map((type) => (
-            <TouchableOpacity
-              key={type}
-              style={[
-                styles.segmentBtn,
-                listingTypes === type && styles.segmentBtnActive,
-              ]}
-              onPress={() => toggleListingType(type)}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  listingTypes === type && styles.segmentTextActive,
-                ]}
-              >
-                {type}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.categoryContainer}>
+          <TouchableOpacity
+            style={[
+              styles.categoryCard,
+              propertyCategory === "Residential" && styles.categoryCardActive,
+            ]}
+            onPress={() => selectPropertyCategory("Residential")}
+          >
+            <Ionicons
+              name="home"
+              size={32}
+              color={propertyCategory === "Residential" ? COLORS.primary : "#94A3B8"}
+            />
+            <Text style={[
+              styles.categoryTitle,
+              propertyCategory === "Residential" && styles.categoryTitleActive,
+            ]}>Residential</Text>
+            <Text style={styles.categorySub}>Properties</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.categoryCard,
+              propertyCategory === "Commercial" && styles.categoryCardActive,
+            ]}
+            onPress={() => selectPropertyCategory("Commercial")}
+          >
+            <Ionicons
+              name="business"
+              size={32}
+              color={propertyCategory === "Commercial" ? COLORS.primary : "#94A3B8"}
+            />
+            <Text style={[
+              styles.categoryTitle,
+              propertyCategory === "Commercial" && styles.categoryTitleActive,
+            ]}>Commercial</Text>
+            <Text style={styles.categorySub}>Properties</Text>
+          </TouchableOpacity>
         </View>
-        {errors.listingTypes && (
-          <Text style={styles.errorText}>{errors.listingTypes}</Text>
+
+        {/* LISTING TYPE - Only show if category is selected */}
+        {propertyCategory && (
+          <>
+            <Text style={styles.label}>
+              I WANT TO <Text style={styles.required}>*</Text>
+            </Text>
+            <View style={styles.segmentContainer}>
+              {getListingOptions().map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.segmentBtn,
+                    listingTypes === type && styles.segmentBtnActive,
+                  ]}
+                  onPress={() => toggleListingType(type)}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      listingTypes === type && styles.segmentTextActive,
+                    ]}
+                  >
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {errors.listingTypes && (
+              <Text style={styles.errorText}>{errors.listingTypes}</Text>
+            )}
+          </>
         )}
 
-        {/* PROPERTY TYPE */}
-        <Text style={styles.label}>
-          PROPERTY TYPE <Text style={styles.required}>*</Text>
-        </Text>
-        <View style={styles.gridContainer}>
-          {PROPERTY_TYPES.filter(type => !(listingTypes === "PG/Co-living" && type.id === "plot")).map((type) => (
-            <TouchableOpacity
-              key={type.id}
-              style={[
-                styles.typeCard,
-                propertyTypes.includes(type.id) && styles.typeCardActive,
-              ]}
-              onPress={() => togglePropertyType(type.id)}
-            >
-              {propertyTypes.includes(type.id) && (
-                <Ionicons
-                  name="checkmark-circle"
-                  size={18}
-                  color={COLORS.primary}
-                  style={{ position: "absolute", top: 8, right: 8 }}
-                />
-              )}
-              <Text style={styles.typeLabel}>{type.label}</Text>
-              <Text style={styles.typeSub}>{type.sub}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        {errors.propertyTypes && (
-          <Text style={styles.errorText}>{errors.propertyTypes}</Text>
+        {/* PROPERTY TYPE - Only show if category is selected */}
+        {propertyCategory && (
+          <>
+            <Text style={styles.label}>
+              PROPERTY TYPE <Text style={styles.required}>*</Text>
+            </Text>
+            <View style={styles.gridContainer}>
+              {getAvailablePropertyTypes().map((type) => (
+                <TouchableOpacity
+                  key={type.id}
+                  style={[
+                    styles.typeCard,
+                    propertyTypes.includes(type.id) && styles.typeCardActive,
+                  ]}
+                  onPress={() => togglePropertyType(type.id)}
+                >
+                  {propertyTypes.includes(type.id) && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={18}
+                      color={COLORS.primary}
+                      style={{ position: "absolute", top: 8, right: 8 }}
+                    />
+                  )}
+                  <Text style={styles.typeLabel}>{type.label}</Text>
+                  <Text style={styles.typeSub}>{type.sub}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {errors.propertyTypes && (
+              <Text style={styles.errorText}>{errors.propertyTypes}</Text>
+            )}
+          </>
         )}
 
         {/* PROPERTY DETAILS SECTION */}
-        {(hasResidentialType || hasNonPlotType) && (
+        {(hasResidentialType || hasNonPlotType || hasCommercialType) && (
           <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Property Details</Text>
         )}
 
         {/* CONDITIONAL INPUTS */}
-        {hasResidentialType && (
+        {hasResidentialType && !hasCommercialType && (
           <>
             <Text style={styles.label}>
               BHK <Text style={styles.required}>*</Text>
@@ -727,7 +821,7 @@ export default function AddPropertyScreen() {
           </>
         )}
 
-        {hasNonPlotType && (
+        {hasNonPlotType && !hasCommercialType && (
           <>
             <Text style={styles.label}>
               BEDROOMS <Text style={styles.required}>*</Text>
@@ -767,7 +861,7 @@ export default function AddPropertyScreen() {
           </>
         )}
 
-        {(hasResidentialType || hasPlotType) && (
+        {(hasResidentialType || hasPlotType || hasCommercialType) && (
           <>
             <Text style={styles.label}>
               BUILT-UP AREA (SQFT) <Text style={styles.required}>*</Text>
@@ -825,6 +919,57 @@ export default function AddPropertyScreen() {
             )}
           </>
         )}
+
+        {/* COMMERCIAL SPECIFIC FIELDS */}
+        {hasCommercialType && (
+          <>
+            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Commercial Details</Text>
+
+            <Text style={styles.label}>FLOOR NUMBER</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Eg: 2"
+              keyboardType="numeric"
+              value={floorNo}
+              onChangeText={setFloorNo}
+              maxLength={3}
+            />
+
+            <Text style={styles.label}>PARKING CAPACITY</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Eg: 10"
+              keyboardType="numeric"
+              value={parking}
+              onChangeText={setParking}
+              maxLength={4}
+            />
+
+            <Text style={styles.label}>WASHROOMS</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Eg: 3"
+              keyboardType="numeric"
+              value={washrooms}
+              onChangeText={setWashrooms}
+              maxLength={2}
+            />
+
+            <Text style={styles.label}>LOCATION</Text>
+            <TouchableOpacity
+              style={[styles.checkboxContainer, mainRoadFacing && styles.checkboxContainerActive]}
+              onPress={() => setMainRoadFacing(!mainRoadFacing)}
+            >
+              <Ionicons
+                name={mainRoadFacing ? "checkbox" : "square-outline"}
+                size={24}
+                color={mainRoadFacing ? COLORS.primary : COLORS.textSecondary}
+              />
+              <Text style={styles.checkboxLabel}>Main Road Facing</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
 
         {/* PRICING SECTION */}
         {hasSellingListing && (
@@ -1098,6 +1243,41 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: "#64748B",
   },
+  categoryContainer: {
+    flexDirection: "row",
+    gap: 16,
+    marginBottom: 8,
+  },
+  categoryCard: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#E2E8F0",
+    minHeight: 100,
+  },
+  categoryCardActive: {
+    backgroundColor: "#EFF6FF",
+    borderColor: COLORS.primary,
+    ...LAYOUT.shadow,
+  },
+  categoryTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    marginTop: 8,
+  },
+  categoryTitleActive: {
+    color: COLORS.primary,
+  },
+  categorySub: {
+    fontSize: 11,
+    color: "#94A3B8",
+    marginTop: 2,
+  },
   required: {
     color: "#EF4444",
   },
@@ -1341,5 +1521,23 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: "bold",
     fontSize: 14,
+  },
+  checkboxContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  checkboxContainerActive: {
+    backgroundColor: "#EFF6FF",
+    borderColor: COLORS.primary,
+  },
+  checkboxLabel: {
+    marginLeft: 12,
+    fontSize: 14,
+    color: COLORS.textPrimary,
   },
 });

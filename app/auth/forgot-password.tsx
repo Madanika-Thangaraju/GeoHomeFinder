@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
@@ -17,7 +17,7 @@ import { CustomInput } from '../../src/components/shared/CustomInput';
 import { GlowButton } from '../../src/components/shared/GlowButton';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 
-const BASE_URL = "http://192.168.29.40:3001";
+const BASE_URL = "http://192.168.29.39:3000";
 
 export default function ForgotPasswordScreen() {
     const router = useRouter();

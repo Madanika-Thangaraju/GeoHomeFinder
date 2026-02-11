@@ -2,14 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ExpoLocation from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { io, Socket } from 'socket.io-client';
-import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
-import { createTourRequestApi, getConversation, getProperty, sendMessageToApi } from '../../src/services/service';
-import { getUser } from '../../src/utils/auth';
+import { COLORS, LAYOUT, SPACING } from '@/src/constants/theme';
+import { createTourRequestApi, getConversation, getProperty, sendMessageToApi } from '@/src/services/service';
+import { getUser } from '@/src/utils/auth';
 
 const { width } = Dimensions.get('window');
-const SOCKET_URL = "http://172.30.51.246:3000";
+const SOCKET_URL = "http://192.168.29.40:3000";
 
 export default function ChatScreen() {
     const { id, otherUserId, otherUserName } = useLocalSearchParams();
@@ -76,14 +76,26 @@ export default function ChatScreen() {
                     socket.emit('join_room', String(user.id));
 
                     socket.on('receive_message', (data) => {
+                        console.log("📥 New message received:", data);
+                        // Only add if it belongs to THIS conversation
                         if (String(data.sender_id) === String(rId)) {
-                            setMessages(prev => [...prev, {
-                                id: Date.now().toString(),
-                                content: data.content,
-                                sender_id: data.sender_id,
-                                sender_type: data.sender_type,
-                                created_at: new Date().toISOString()
-                            }]);
+                            setMessages(prev => {
+                                // Prevent duplicates
+                                if (prev.find(m => m.id === data.id)) return prev;
+                                return [...prev, {
+                                    id: data.id || Date.now().toString(),
+                                    content: data.content,
+                                    sender_id: data.sender_id,
+                                    sender_type: data.sender_type,
+                                    created_at: data.created_at || new Date().toISOString()
+                                }];
+                            });
+                        }
+                    });
+
+                    socket.on('opponent_typing', (data) => {
+                        if (String(data.sender_id) === String(rId)) {
+                            setIsOpponentTyping(data.isTyping);
                         }
                     });
 
@@ -111,8 +123,9 @@ export default function ChatScreen() {
         const content = message.trim();
         setMessage('');
 
+        const tempId = 'temp-' + Date.now();
         const newMessage = {
-            id: 'temp-' + Date.now(),
+            id: tempId,
             content: content,
             sender_id: currentUser.id,
             sender_type: currentUser.role || 'tenant',
@@ -123,10 +136,10 @@ export default function ChatScreen() {
         setMessages(prev => [...prev, newMessage]);
 
         try {
-            // Save to DB (passing property_id)
+            // 1. Save to DB
             await sendMessageToApi(receiverId, content, 'text', chatProperty?.id || id);
 
-            // Emit via socket
+            // 2. Emit via socket
             if (socketRef.current) {
                 socketRef.current.emit('send_message', {
                     sender_id: currentUser.id,
@@ -243,7 +256,11 @@ export default function ChatScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.container}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
             {/* Header */}
             <View style={styles.header}>
                 <View style={styles.headerTop}>
@@ -296,10 +313,11 @@ export default function ChatScreen() {
                 </View>
             ) : (
                 <ScrollView
-                    ref={scrollViewRef}
+                    ref={scrollViewRef as any}
                     style={styles.messagesContainer}
                     contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: SPACING.m }}
                     onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+                    onLayout={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
                 >
                     <View style={styles.dateSeparator}>
                         <Text style={styles.dateText}>Today</Text>
@@ -308,10 +326,12 @@ export default function ChatScreen() {
                     {messages.map((msg, index) => {
                         const isUserMsg = msg.is_user || (String(msg.sender_id) === String(currentUser?.id));
                         return (
-                            <View key={msg.id || index} style={[
-                                styles.messageRow,
-                                isUserMsg ? styles.userRow : styles.ownerRow
-                            ]}>
+                            <View
+                                key={msg.id ? msg.id.toString() : index.toString()}
+                                style={[
+                                    styles.messageRow,
+                                    isUserMsg ? styles.userRow : styles.ownerRow
+                                ]}>
                                 {!isUserMsg && (
                                     displayInfo.image ? (
                                         <Image source={displayInfo.image} style={styles.msgAvatar} />
@@ -363,7 +383,7 @@ export default function ChatScreen() {
             )}
 
             {/* Input Area */}
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+            <View>
                 {/* Quick Actions */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActionsScroll} contentContainerStyle={{ paddingHorizontal: SPACING.m }}>
                     {currentUser?.role !== 'owner' && (
@@ -400,7 +420,7 @@ export default function ChatScreen() {
                         <Ionicons name="send" size={20} color={COLORS.white} style={{ marginLeft: 2 }} />
                     </TouchableOpacity>
                 </View>
-            </KeyboardAvoidingView>
+            </View>
 
             {/* Emoji Picker Modal */}
             <Modal
@@ -438,7 +458,7 @@ export default function ChatScreen() {
                     </View>
                 </TouchableOpacity>
             </Modal>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 

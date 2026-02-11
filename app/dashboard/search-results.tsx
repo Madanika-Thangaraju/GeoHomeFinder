@@ -7,7 +7,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import Animated from 'react-native-reanimated';
-import { COLORS, LAYOUT } from '../../src/constants/theme';
+import { COLORS, LAYOUT } from '@/src/constants/theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -21,6 +21,8 @@ export default function SearchResultsScreen() {
     const router = useRouter();
     const [properties, setProperties] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [searchLocation, setSearchLocation] = useState('Search results');
+
     const [region, setRegion] = useState({
         latitude: 11.0168,
         longitude: 76.9558,
@@ -48,13 +50,19 @@ export default function SearchResultsScreen() {
                 filters = {
                     minPrice: prefs.minBudget,
                     maxPrice: prefs.maxBudget,
-                    propertyType: prefs.selectedPropertyType,
+                    propertyType: prefs.selectedPropertyTypes?.join(','),
                     bedrooms: prefs.selectedConfig?.split(' ')[0],
-                    listingType: listingType
+                    listingType: listingType,
+                    category: prefs.category,
+                    furnishing: prefs.furnishing,
+                    floorNo: prefs.floorNo,
+                    parking: prefs.parking,
+                    mainRoadFacing: prefs.mainRoadFacing,
+                    washrooms: prefs.washrooms
                 };
-                if (prefs.selectedPropertyType === 'PG/Co-living') filters.listingType = 'PG/Co-living';
 
                 if (prefs.location) {
+                    setSearchLocation(prefs.location.address?.split(',')[0] || 'Selected Area');
                     setRegion({
                         latitude: prefs.location.lat,
                         longitude: prefs.location.lng,
@@ -80,8 +88,8 @@ export default function SearchResultsScreen() {
                 match: `${Math.floor(Math.random() * 20) + 80}%`,
                 status: prop.status || 'Available',
                 isTopMatch: Math.random() > 0.7,
-                latitude: parseFloat(prop.location?.lat || prop.latitude),
-                longitude: parseFloat(prop.location?.lng || prop.longitude)
+                latitude: parseFloat(prop.location?.lat || prop.latitude || 0) || 11.0168,
+                longitude: parseFloat(prop.location?.lng || prop.longitude || 0) || 76.9558
             }));
 
             setProperties(formatted);
@@ -129,6 +137,7 @@ export default function SearchResultsScreen() {
                     style={StyleSheet.absoluteFillObject}
                     region={region}
                     onRegionChangeComplete={setRegion}
+                    showsUserLocation={true}
                 >
                     {properties.map((prop) => (
                         <Marker
@@ -149,9 +158,9 @@ export default function SearchResultsScreen() {
                             <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
                         </TouchableOpacity>
                         <View style={styles.searchBar}>
-                            <Ionicons name="location-sharp" size={16} color={COLORS.textSecondary} />
+                            <Ionicons name="location-sharp" size={16} color={COLORS.primary} />
                             <Text style={styles.searchText} numberOfLines={1}>
-                                {properties.length > 0 ? properties[0].address.split(',')[0] : 'Search results'}
+                                {searchLocation}
                             </Text>
                             <Ionicons name="checkmark-circle" size={16} color={COLORS.primary} />
                         </View>

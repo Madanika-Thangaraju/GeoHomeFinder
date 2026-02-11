@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -13,7 +14,9 @@ export default function NotificationsScreen() {
 
     const fetchNotifications = async () => {
         try {
-            const data = await getNotificationsApi();
+            // Get current role from AsyncStorage to filter notifications
+            const role = await AsyncStorage.getItem('userRole') as 'tenant' | 'owner' | null;
+            const data = await getNotificationsApi(role || undefined);
             setNotifications(data || []);
         } catch (error) {
             console.error("Failed to fetch notifications:", error);
@@ -44,6 +47,12 @@ export default function NotificationsScreen() {
     };
 
     const getIconInfo = (type: string) => {
+        if (type.startsWith('tour_')) {
+            return { name: 'calendar', color: type.includes('accepted') ? COLORS.success : '#EF4444' };
+        }
+        if (type.startsWith('call_')) {
+            return { name: 'call', color: type.includes('accepted') ? COLORS.success : '#EF4444' };
+        }
         switch (type) {
             case 'like': return { name: 'heart', color: '#EF4444' };
             case 'save': return { name: 'bookmark', color: COLORS.primary };
@@ -110,7 +119,13 @@ export default function NotificationsScreen() {
                                             {item.type === 'save' && ' saved your property '}
                                             {item.type === 'view' && ' viewed your property '}
                                             {item.type === 'message' && ' sent you a message '}
-                                            <Text style={styles.propertyName}>{item.property_title}</Text>
+
+                                            {/* For tour/call notifications, backend sends the full message */}
+                                            {(item.type.startsWith('tour_') || item.type.startsWith('call_')) ? `: ${item.message}` : ''}
+
+                                            {item.property_title && !item.type.startsWith('tour_') && (
+                                                <Text style={styles.propertyName}> {item.property_title}</Text>
+                                            )}
                                         </Text>
                                         <Text style={styles.timeText}>{formatTime(item.created_at)}</Text>
                                     </View>

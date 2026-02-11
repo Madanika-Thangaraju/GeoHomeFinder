@@ -298,10 +298,16 @@ export default function OwnerProfile() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            <Image
-              source={userData.image ? { uri: userData.image } : { uri: 'https://cdn-icons-png.flaticon.com/512/149/149071.png' }}
-              style={styles.avatar}
-            />
+            {userData.image ? (
+              <Image
+                source={{ uri: userData.image }}
+                style={styles.avatar}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.initialsAvatar]}>
+                <Text style={styles.initialsText}>{userData.name?.charAt(0) || 'U'}</Text>
+              </View>
+            )}
             <TouchableOpacity
               style={styles.editBtn}
               onPress={() => {
@@ -317,39 +323,10 @@ export default function OwnerProfile() {
             <View style={styles.roleTag}>
               <Text style={styles.roleText}>{userData.role}</Text>
             </View>
-            <Text style={styles.locationText}>•  {userData.location}</Text>
+            <Text style={styles.locationText}>{userData.location}</Text>
           </View>
         </View>
 
-        <View style={styles.statsContainer}>
-          <StatItem value={stats.listings} label="LISTINGS" />
-          <StatItem value={stats.views} label="VIEWS" />
-          <StatItem value={stats.rating} label="RATING" rating />
-        </View>
-
-        <MenuItem
-          icon="person"
-          title="Personal Details"
-          onPress={() => setShowPersonalDetails(true)}
-        />
-
-        <MenuItem
-          icon="notifications"
-          title="Push Notifications"
-          hasSwitch
-        />
-
-        <MenuItem
-          icon="help-circle"
-          title="Help & Support"
-          onPress={() => setShowHelpSupport(true)}
-        />
-
-        <MenuItem
-          icon="document-text"
-          title="Terms & Policies"
-          onPress={() => setShowTermsPolicies(true)}
-        />
 
         {/* Accepted Interactions */}
         {(acceptedTours.length > 0 || acceptedCalls.length > 0) && (
@@ -377,6 +354,29 @@ export default function OwnerProfile() {
             </ScrollView>
           </View>
         )}
+
+        <MenuItem
+          icon="person"
+          title="Personal Details"
+          onPress={() => setShowPersonalDetails(true)}
+        />
+
+
+
+        <MenuItem
+          icon="help-circle"
+          title="Help & Support"
+          onPress={() => setShowHelpSupport(true)}
+        />
+
+        <MenuItem
+          icon="document-text"
+          title="Terms & Policies"
+          onPress={() => setShowTermsPolicies(true)}
+        />
+
+        {/* Accepted Interactions */}
+
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out</Text>
@@ -438,10 +438,16 @@ export default function OwnerProfile() {
             </View>
             <View style={styles.avatarEditContainer}>
               <TouchableOpacity onPress={pickImage} style={styles.avatarPlaceholderContainer}>
-                <Image
-                  source={editData.image ? { uri: editData.image } : { uri: 'https://cdn-icons-png.flaticon.com/512/149/149071.png' }}
-                  style={styles.avatarLarge}
-                />
+                {editData.image ? (
+                  <Image
+                    source={{ uri: editData.image }}
+                    style={styles.avatarLarge}
+                  />
+                ) : (
+                  <View style={[styles.avatarLarge, styles.initialsAvatarLarge]}>
+                    <Text style={styles.initialsTextLarge}>{editData.name?.charAt(0) || 'U'}</Text>
+                  </View>
+                )}
                 <View style={styles.avatarOverlay}>
                   <Ionicons name="camera" size={24} color={COLORS.white} />
                   <Text style={styles.cameraText}>Change Photo</Text>
@@ -594,16 +600,20 @@ const styles = StyleSheet.create({
   profileSection: { alignItems: 'center', backgroundColor: COLORS.white, paddingVertical: 24, marginHorizontal: 20, marginTop: 20, borderRadius: 20, ...LAYOUT.shadow, shadowOpacity: 0.05 },
   avatarContainer: { position: 'relative', marginBottom: 12 },
   avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, borderColor: '#EFF6FF' },
+  initialsAvatar: { backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
+  initialsText: { fontSize: 32, fontWeight: 'bold', color: COLORS.primary },
   avatarLarge: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#F1F5F9' },
+  initialsAvatarLarge: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#EFF6FF' },
+  initialsTextLarge: { fontSize: 48, fontWeight: 'bold', color: COLORS.primary },
   avatarPlaceholderContainer: { position: 'relative' },
   avatarOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 60, justifyContent: 'center', alignItems: 'center' },
   cameraText: { color: COLORS.white, fontSize: 10, fontWeight: 'bold', marginTop: 4 },
   editBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#3B82F6', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.white },
   userNameHeader: { fontSize: 20, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 8 },
-  roleContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  roleTag: { backgroundColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  roleContainer: { flexDirection: 'column', alignItems: 'center', gap: 8 },
+  roleTag: { backgroundColor: '#DCFCE7', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
   roleText: { color: '#166534', fontSize: 12, fontWeight: '600' },
-  locationText: { color: COLORS.textSecondary, fontSize: 14 },
+  locationText: { color: COLORS.textSecondary, fontSize: 13, textAlign: 'center', paddingHorizontal: 10 },
   statsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -645,7 +655,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   logoutText: { color: COLORS.error, fontWeight: "bold", fontSize: 16 },
-  acceptedSection: { marginTop: 20, marginHorizontal: 20 },
+  acceptedSection: { marginBottom: 20, marginHorizontal: 20 },
   sectionHeaderTitle: { fontSize: 14, fontWeight: '800', color: COLORS.textSecondary, marginBottom: 12, textTransform: 'uppercase' },
   acceptedScroll: { gap: 10, paddingBottom: 5 },
   acceptedCard: {

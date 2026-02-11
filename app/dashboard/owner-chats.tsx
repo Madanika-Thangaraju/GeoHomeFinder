@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { io } from 'socket.io-client';
 import { COLORS, LAYOUT, SPACING } from '../../src/constants/theme';
 import { getConversationsList } from '../../src/services/service';
 import { getUser } from '../../src/utils/auth';
@@ -14,12 +15,28 @@ export default function OwnerChatsScreen() {
 
     useFocusEffect(
         useCallback(() => {
+            let socket: any;
+
             const fetchData = async () => {
                 try {
                     const user = await getUser();
                     setCurrentUser(user);
                     const list = await getConversationsList();
                     setConversations(list);
+
+                    // Initialize Socket for real-time list updates
+                    socket = io("http://192.168.29.40:3000"); // Use consistent URL
+                    socket.emit('join_room', String(user.id));
+
+                    socket.on('receive_message', async () => {
+                        console.log("🔄 Message received, refreshing list...");
+                        try {
+                            const updatedList = await getConversationsList();
+                            setConversations(updatedList);
+                        } catch (err) {
+                            console.error("Error refreshing chat list:", err);
+                        }
+                    });
                 } catch (error: any) {
                     console.error("❌ Failed to fetch conversations:", error.message);
                 } finally {
@@ -27,6 +44,13 @@ export default function OwnerChatsScreen() {
                 }
             };
             fetchData();
+
+            return () => {
+                if (socket) {
+                    console.log("🔌 Disconnecting socket from chat list");
+                    socket.disconnect();
+                }
+            };
         }, [])
     );
 
@@ -38,8 +62,9 @@ export default function OwnerChatsScreen() {
             <TouchableOpacity
                 style={styles.chatCard}
                 onPress={() => router.push({
-                    pathname: `/chat/${String(item.property_id)}`,
+                    pathname: '/chat/[id]',
                     params: {
+                        id: String(item.property_id),
                         chatId: item.id,
                         otherUserId: item.other_user_id || item.tenant_id,
                         otherUserName: item.other_user_name || item.tenant_name
@@ -47,9 +72,16 @@ export default function OwnerChatsScreen() {
                 })}
             >
                 <View style={styles.avatarContainer}>
-                    <View style={styles.avatarPlaceholder}>
-                        <Text style={styles.avatarText}>{displayName.charAt(0)}</Text>
-                    </View>
+                    {(item.other_user_image || item.tenant_image) ? (
+                        <Image
+                            source={{ uri: item.other_user_image || item.tenant_image }}
+                            style={styles.avatarImage}
+                        />
+                    ) : (
+                        <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarText}>{displayName.charAt(0)}</Text>
+                        </View>
+                    )}
                     <View style={styles.activeDot} />
                 </View>
 
@@ -159,6 +191,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: '#DBEAFE',
+    },
+    avatarImage: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
     },
     avatarText: {
         fontSize: 20,
