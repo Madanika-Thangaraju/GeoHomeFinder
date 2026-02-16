@@ -2,15 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Image } from 'expo-image';
 import {
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
-    ActivityIndicator
+    ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { COLORS, SPACING, LAYOUT } from '../../src/constants/theme';
 import { BlurView } from 'expo-blur';

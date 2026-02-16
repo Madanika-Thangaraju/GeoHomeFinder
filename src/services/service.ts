@@ -1,24 +1,15 @@
 import { RegisterUserPayload } from "../../src/types/tenant.types";
 import { getToken, removeToken, saveToken, saveUser } from "../utils/auth";
 
-const BASE_URL = "http://192.168.29.39:3000";
+// export const BASE_URL = "http://192.168.29.40:3000";
+// export const BASE_URL = "https://testapi.geohomefinder.com"
+export const BASE_URL = "http://192.168.29.39:3000";
 
-const fetchWithTimeout = async (url: string, options: any = {}, timeout = 10000) => {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    throw error;
-  }
-};
+// ==================== REGISTER USER ====================
 export const registerUser = async (data: RegisterUserPayload) => {
   console.log('Registering user...');
   try {
-    const response = await fetchWithTimeout(`${BASE_URL}/users/register`, {
+    const response = await fetch(`${BASE_URL}/users/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -31,14 +22,6 @@ export const registerUser = async (data: RegisterUserPayload) => {
 
     if (!response.ok) {
       throw new Error(result.message || "Registration failed");
-    }
-
-    // ✅ AUTO LOGIN: SAVE TOKEN AND USER
-    if (result.token) {
-      await saveToken(result.token);
-    }
-    if (result.user) {
-      await saveUser(result.user);
     }
 
     return result;
@@ -66,28 +49,42 @@ interface LoginResponse {
 }
 
 export const loginUser = async (data: LoginPayload): Promise<LoginResponse> => {
-  if (!data.identifier) throw new Error("Email or Phone is required");
+  try {
+    const response = await fetch(`${BASE_URL}/users/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
 
-  const response = await fetchWithTimeout(`${BASE_URL}/users/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+    const result = await response.json();
 
-  const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.message || "Login failed");
+    }
 
-  if (!response.ok) {
-    throw new Error(result.message || "Login failed");
+    // ✅ SAVE TOKEN USING HELPER
+    await saveToken(result.token);
+    // Save user details
+    if (result.user) {
+      await saveUser(result.user);
+    }
+
+    return result;
+  } catch (error: any) {
+    console.log("LOGIN ERROR:", error);
+
+    // Handle specific error types
+    if (error.name === 'AbortError') {
+      throw new Error("Request timeout. Please check your connection and try again.");
+    }
+
+    if (error instanceof TypeError) {
+      throw new Error("Network error. Please check your internet connection.");
+    }
+
+    // Re-throw the original error message
+    throw new Error(error.message || "Login failed. Please try again.");
   }
-
-  // ✅ SAVE TOKEN USING HELPER
-  await saveToken(result.token);
-  // Save user details
-  if (result.user) {
-    await saveUser(result.user);
-  }
-
-  return result;
 };
 
 
@@ -108,7 +105,7 @@ export const logoutUser = async () => {
 // ==================== OPTIONAL: GET CURRENT USER ====================
 export const getCurrentUser = async (token: string) => {
   try {
-    const response = await fetchWithTimeout(`${BASE_URL}/users/me`, {
+    const response = await fetch(`${BASE_URL}/users/me`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -137,7 +134,7 @@ export const addProperty = async (data: any) => {
     throw new Error("User not authenticated");
   }
 
-  const response = await fetchWithTimeout(`${BASE_URL}/properties/add`, {
+  const response = await fetch(`${BASE_URL}/properties/add`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -162,7 +159,7 @@ export const updateProperty = async (id: number | string, data: any) => {
     throw new Error("User not authenticated");
   }
 
-  const response = await fetchWithTimeout(`${BASE_URL}/properties/${id}`, {
+  const response = await fetch(`${BASE_URL}/properties/${id}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -187,7 +184,7 @@ export const deleteProperty = async (id: number | string) => {
     throw new Error("User not authenticated");
   }
 
-  const response = await fetchWithTimeout(`${BASE_URL}/properties/${id}`, {
+  const response = await fetch(`${BASE_URL}/properties/${id}`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
@@ -222,12 +219,6 @@ export const tenantProperties = async (lat?: number, lng?: number, radius?: numb
     if (filters.propertyType) params.append("propertyType", filters.propertyType);
     if (filters.bedrooms) params.append("bedrooms", filters.bedrooms);
     if (filters.listingType) params.append("listingType", filters.listingType);
-    if (filters.category) params.append("category", filters.category);
-    if (filters.furnishing) params.append("furnishing", filters.furnishing);
-    if (filters.floorNo) params.append("floorNo", filters.floorNo);
-    if (filters.parking) params.append("parking", filters.parking);
-    if (filters.mainRoadFacing !== undefined) params.append("mainRoadFacing", filters.mainRoadFacing.toString());
-    if (filters.washrooms) params.append("washrooms", filters.washrooms);
   }
 
   const queryString = params.toString();
@@ -235,7 +226,7 @@ export const tenantProperties = async (lat?: number, lng?: number, radius?: numb
     url += `?${queryString}`;
   }
 
-  const response = await fetchWithTimeout(url, {
+  const response = await fetch(url, {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -277,7 +268,7 @@ export const getOwnerProperties = async (userId: number | string) => {
   }
 
   // Matching API route as requested: pass logged in user id
-  const response = await fetchWithTimeout(`${BASE_URL}/owners/listings/${userId}`, {
+  const response = await fetch(`${BASE_URL}/owners/listings/${userId}`, {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -293,38 +284,6 @@ export const getOwnerProperties = async (userId: number | string) => {
   return result.data; // Assuming backend returns { data: [...] } like tenantProperties
 };
 
-export const getStagnantPropertiesApi = async () => {
-  const token = await getToken();
-  if (!token) throw new Error("User not authenticated");
-
-  const response = await fetchWithTimeout(`${BASE_URL}/owners/stagnant`, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.message || "Failed to fetch stagnant properties");
-  return result.data;
-};
-
-export const getVisitedPropertiesApi = async () => {
-  const token = await getToken();
-  if (!token) throw new Error("User not authenticated");
-
-  const response = await fetchWithTimeout(`${BASE_URL}/owners/visited`, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.message || "Failed to fetch visited properties");
-  return result.data;
-};
-
 
 // ---------- Helper ----------
 const authHeaders = async () => {
@@ -335,10 +294,9 @@ const authHeaders = async () => {
   };
 };
 
-
 // ---------- Profile ----------
 export const getProfile = async () => {
-  const res = await fetchWithTimeout(`${BASE_URL}/owners/profile`, {
+  const res = await fetch(`${BASE_URL}/owners/profile`, {
     headers: await authHeaders(),
   });
 
@@ -354,7 +312,7 @@ export const updateProfile = async (payload: {
   longitude?: number;
   image?: string;
 }) => {
-  const res = await fetchWithTimeout(`${BASE_URL}/owners/profile`, {
+  const res = await fetch(`${BASE_URL}/owners/profile`, {
     method: "PUT",
     headers: await authHeaders(),
     body: JSON.stringify(payload),
@@ -365,7 +323,7 @@ export const updateProfile = async (payload: {
 };
 
 export const togglePushNotification = async () => {
-  const res = await fetchWithTimeout(`${BASE_URL}/owners/notifications`, {
+  const res = await fetch(`${BASE_URL}/owners/notifications`, {
     method: "PATCH",
     headers: await authHeaders(),
   });
@@ -380,7 +338,7 @@ export const getConversation = async (otherUserId: number | string, propertyId?:
   if (propertyId) url += `?propertyId=${propertyId}`;
 
   console.log(`[Chat] Fetching from: ${url}`);
-  const res = await fetchWithTimeout(url, {
+  const res = await fetch(url, {
     headers: await authHeaders(),
   });
   if (!res.ok) {
@@ -391,7 +349,7 @@ export const getConversation = async (otherUserId: number | string, propertyId?:
 };
 
 export const getConversationsList = async () => {
-  const res = await fetchWithTimeout(`${BASE_URL}/chat/conversations`, {
+  const res = await fetch(`${BASE_URL}/chat/conversations`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch conversations");
@@ -399,7 +357,7 @@ export const getConversationsList = async () => {
 };
 
 export const sendMessageToApi = async (receiverId: number | string, content: string, type: string = 'text', propertyId?: number | string) => {
-  const res = await fetchWithTimeout(`${BASE_URL}/chat/send`, {
+  const res = await fetch(`${BASE_URL}/chat/send`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ receiver_id: receiverId, content, type, property_id: propertyId }),
@@ -410,7 +368,7 @@ export const sendMessageToApi = async (receiverId: number | string, content: str
 
 // ==================== LIKES & SAVED ====================
 export const likePropertyApi = async (propertyId: number | string, status: boolean) => {
-  const res = await fetchWithTimeout(`${BASE_URL}/tenants/like`, {
+  const res = await fetch(`${BASE_URL}/tenants/like`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ propertyId, status }),
@@ -420,7 +378,7 @@ export const likePropertyApi = async (propertyId: number | string, status: boole
 };
 
 export const getLikedPropertiesApi = async () => {
-  const res = await fetchWithTimeout(`${BASE_URL}/tenants/liked`, {
+  const res = await fetch(`${BASE_URL}/tenants/liked`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch liked properties");
@@ -429,7 +387,7 @@ export const getLikedPropertiesApi = async () => {
 };
 
 export const savePropertyApi = async (propertyId: number | string, status: boolean, notes: string = "") => {
-  const res = await fetchWithTimeout(`${BASE_URL}/tenants/save`, {
+  const res = await fetch(`${BASE_URL}/tenants/save`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ propertyId, status, notes }),
@@ -439,7 +397,7 @@ export const savePropertyApi = async (propertyId: number | string, status: boole
 };
 
 export const getSavedPropertiesApi = async () => {
-  const res = await fetchWithTimeout(`${BASE_URL}/tenants/saved`, {
+  const res = await fetch(`${BASE_URL}/tenants/saved`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch saved properties");
@@ -448,7 +406,7 @@ export const getSavedPropertiesApi = async () => {
 };
 
 export const trackPropertyViewApi = async (propertyId: number | string) => {
-  const res = await fetchWithTimeout(`${BASE_URL}/tenants/view`, {
+  const res = await fetch(`${BASE_URL}/tenants/view`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ propertyId }),
@@ -458,7 +416,7 @@ export const trackPropertyViewApi = async (propertyId: number | string) => {
 };
 
 export const getRecentlyViewedApi = async () => {
-  const res = await fetchWithTimeout(`${BASE_URL}/tenants/viewed`, {
+  const res = await fetch(`${BASE_URL}/tenants/viewed`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch recently viewed properties");
@@ -467,11 +425,8 @@ export const getRecentlyViewedApi = async () => {
 };
 
 // ==================== NOTIFICATION SERVICES ====================
-export const getNotificationsApi = async (role?: 'tenant' | 'owner') => {
-  let url = `${BASE_URL}/notifications`;
-  if (role) url += `?role=${role}`;
-
-  const res = await fetchWithTimeout(url, {
+export const getNotificationsApi = async (p0: string) => {
+  const res = await fetch(`${BASE_URL}/notifications`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch notifications");
@@ -479,7 +434,7 @@ export const getNotificationsApi = async (role?: 'tenant' | 'owner') => {
 };
 
 export const markNotificationReadApi = async (id: number | string) => {
-  const res = await fetchWithTimeout(`${BASE_URL}/notifications/${id}/read`, {
+  const res = await fetch(`${BASE_URL}/notifications/${id}/read`, {
     method: "PUT",
     headers: await authHeaders(),
   });
@@ -487,8 +442,40 @@ export const markNotificationReadApi = async (id: number | string) => {
   return res.json();
 };
 
-// ==================== INTERACTION SERVICES ====================
+// ==================== STAGNANT & VISITED PROPERTIES ====================
+export const getStagnantPropertiesApi = async () => {
+  const token = await getToken();
+  if (!token) throw new Error("User not authenticated");
 
+  const response = await fetch(`${BASE_URL}/owners/stagnant`, {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.message || "Failed to fetch stagnant properties");
+  return result.data;
+};
+
+export const getVisitedPropertiesApi = async () => {
+  const token = await getToken();
+  if (!token) throw new Error("User not authenticated");
+
+  const response = await fetch(`${BASE_URL}/owners/visited`, {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.message || "Failed to fetch visited properties");
+  return result.data;
+};
+
+// ==================== INTERACTION SERVICES ====================
 export const createTourRequestApi = async (data: {
   owner_id: number;
   property_id: number;
@@ -496,7 +483,7 @@ export const createTourRequestApi = async (data: {
   tour_time: string;
   message?: string;
 }) => {
-  const res = await fetchWithTimeout(`${BASE_URL}/interactions/tour`, {
+  const res = await fetch(`${BASE_URL}/interactions/tour`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify(data),
@@ -509,7 +496,7 @@ export const createTourRequestApi = async (data: {
 };
 
 export const getTourRequestsApi = async (role: 'owner' | 'tenant') => {
-  const res = await fetchWithTimeout(`${BASE_URL}/interactions/tours?role=${role}`, {
+  const res = await fetch(`${BASE_URL}/interactions/tours?role=${role}`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch tour requests");
@@ -517,7 +504,7 @@ export const getTourRequestsApi = async (role: 'owner' | 'tenant') => {
 };
 
 export const updateTourStatusApi = async (id: number | string, status: 'accepted' | 'rejected') => {
-  const res = await fetchWithTimeout(`${BASE_URL}/interactions/tour/${id}/status`, {
+  const res = await fetch(`${BASE_URL}/interactions/tour/${id}/status`, {
     method: "PATCH",
     headers: await authHeaders(),
     body: JSON.stringify({ status }),
@@ -527,7 +514,7 @@ export const updateTourStatusApi = async (id: number | string, status: 'accepted
 };
 
 export const createCallRequestApi = async (owner_id: number) => {
-  const res = await fetchWithTimeout(`${BASE_URL}/interactions/call`, {
+  const res = await fetch(`${BASE_URL}/interactions/call`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ owner_id }),
@@ -537,7 +524,7 @@ export const createCallRequestApi = async (owner_id: number) => {
 };
 
 export const getCallRequestsApi = async (role: 'owner' | 'tenant') => {
-  const res = await fetchWithTimeout(`${BASE_URL}/interactions/calls?role=${role}`, {
+  const res = await fetch(`${BASE_URL}/interactions/calls?role=${role}`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch call requests");
@@ -545,7 +532,7 @@ export const getCallRequestsApi = async (role: 'owner' | 'tenant') => {
 };
 
 export const updateCallStatusApi = async (id: number | string, status: 'accepted' | 'rejected') => {
-  const res = await fetchWithTimeout(`${BASE_URL}/interactions/call/${id}/status`, {
+  const res = await fetch(`${BASE_URL}/interactions/call/${id}/status`, {
     method: "PATCH",
     headers: await authHeaders(),
     body: JSON.stringify({ status }),
@@ -553,3 +540,4 @@ export const updateCallStatusApi = async (id: number | string, status: 'accepted
   if (!res.ok) throw new Error("Failed to update call status");
   return res.json();
 };
+

@@ -55,18 +55,27 @@ export default function RoleSelectionScreen() {
             }
 
             // 3. Request current position with timeout and balanced accuracy
-            // Using lowest accuracy first to ensure we get SOMETHING
-            let loc = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced,
-                // Time out after 5 seconds to avoid hanging
-                // @ts-ignore
-                timeout: 5000
-            });
+            // Wrap in try-catch to handle immediate failures
+            try {
+                let loc = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                    // Time out after 5 seconds to avoid hanging
+                    // @ts-ignore
+                    timeout: 5000
+                });
 
-            setLocation({
-                lat: loc.coords.latitude,
-                lng: loc.coords.longitude,
-            });
+                setLocation({
+                    lat: loc.coords.latitude,
+                    lng: loc.coords.longitude,
+                });
+            } catch (posError: any) {
+                console.log("Could not get current position:", posError.message);
+                // Use default location as fallback (Coimbatore, India)
+                setLocation({
+                    lat: 11.0168,
+                    lng: 76.9558,
+                });
+            }
         } catch (error: any) {
             console.log("Location fetch optional warning:", error.message);
 

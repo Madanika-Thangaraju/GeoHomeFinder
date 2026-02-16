@@ -1,50 +1,40 @@
 {
   "expo": {
-    "name": "GeoHome",
-    "slug": "GeoHome",
+    "name": "geohome",
+    "slug": "geohome",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "geohome",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app uses your location to show properties near you."
-      }
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/logo.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.madanika.GeoHome",
-      "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
-      ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyDw84Qp9YXjxqy2m6ECrC-Qa4_yiTyiQ6s"
-        }
-      }
+      "package": "com.madanika.geohome"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/logo.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash.png",
+          "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FBF8EE",
+          "backgroundColor": "#ffffff",
           "dark": {
             "backgroundColor": "#000000"
           }
@@ -58,9 +48,8 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "4af08c24-557c-4181-9904-eeaf90b4df95"
+        "projectId": "860cce0d-59b6-456e-8ba2-7b8eb8efb77c"
       }
-    },
-    "owner": "madanika"
+    }
   }
 }
